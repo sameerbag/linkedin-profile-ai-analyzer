@@ -3,12 +3,17 @@ from typing import Dict, Any, List
 from pypdf import PdfReader
 
 
-def extract_text_from_pdf(pdf_file) -> str:
-    """Extract raw text from uploaded PDF file."""
+def extract_text_from_pdf(pdf_file, max_pages: int = 25) -> str:
+    """
+    Safely extract raw text from uploaded PDF file.
+    Includes page-limit guard to prevent resource exhaustion from malformed files.
+    """
     try:
         reader = PdfReader(pdf_file)
         text_pages = []
-        for page in reader.pages:
+        for i, page in enumerate(reader.pages):
+            if i >= max_pages:
+                break
             page_text = page.extract_text()
             if page_text:
                 text_pages.append(page_text)
