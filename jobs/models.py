@@ -47,7 +47,7 @@ class ApplicantProfile:
     phone: str = ""
     
     # Location
-    country: str = "United States"
+    country: str = ""
     city: str = ""
     state_province: str = ""
     postal_code: str = ""
@@ -59,13 +59,13 @@ class ApplicantProfile:
     portfolio_url: str = ""
     
     # Work Authorization & Preferences
-    work_authorization: str = "Authorized to work in country (No sponsorship required)"
+    work_authorization: str = "Authorized to work (No sponsorship required)"
     requires_sponsorship: str = "No"
     willing_to_relocate: str = "Yes"
     target_work_mode: str = "Remote or Hybrid"  # Remote, Hybrid, On-site, Any
     notice_period: str = "Immediate / 2 Weeks"
-    expected_salary: str = "$120,000 - $160,000"
-    years_of_experience: str = "4+ years"
+    expected_salary: str = ""
+    years_of_experience: str = ""
     
     # Profile sections (imported or parsed from LinkedIn)
     headline: str = ""

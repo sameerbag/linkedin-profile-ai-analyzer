@@ -76,6 +76,113 @@ def detect_country_and_city(location_str: str) -> Tuple[str, str]:
     return country, city
 
 
+def find_candidate_block(lines: List[str], linkedin_slug: str = "", email: str = "") -> Tuple[str, str, str]:
+    """
+    Finds (name, headline, location) from LinkedIn PDF text lines by scoring candidate lines
+    and avoiding sidebars, contact blocks, certifications, and languages.
+    """
+    hints = []
+    if linkedin_slug:
+        cleaned_slug = re.sub(r"[-_0-9]+", " ", linkedin_slug).strip().lower()
+        if len(cleaned_slug) >= 3:
+            hints.append(cleaned_slug)
+    if email:
+        username = email.split("@")[0]
+        cleaned_user = re.sub(r"[._0-9]+", " ", username).strip().lower()
+        if len(cleaned_user) >= 3:
+            hints.append(cleaned_user)
+
+    cert_or_skip_words = [
+        "certified", "certification", "solutions architect", "associate", "professional", 
+        "foundation", "license", "credential", "university", "college", "school",
+        "contact", "skills", "languages", "english", "hindi", "spanish", "french", "german",
+        "page", "linkedin"
+    ]
+
+    best_idx = -1
+    best_score = -100
+
+    for i, line in enumerate(lines):
+        line_clean = line.strip()
+        low = line_clean.lower()
+
+        if len(line_clean) < 2 or len(line_clean) > 50:
+            continue
+        if any(w in low for w in ["contact", "summary", "experience", "education", "top skills", "languages", "certifications"]):
+            continue
+        if any(w in low for w in cert_or_skip_words):
+            continue
+        if "@" in line_clean or "http" in low or "(mobile)" in low or "(email)" in low or "(linkedin)" in low:
+            continue
+
+        score = 0
+        words = line_clean.split()
+        if 2 <= len(words) <= 4:
+            score += 15
+
+        line_word_str = " ".join([w.lower() for w in words])
+        for hint in hints:
+            if hint in line_word_str or line_word_str in hint:
+                score += 50
+
+        if all(w[0].isupper() for w in words if w.isalpha()):
+            score += 10
+
+        # Check next line: Headline
+        if i + 1 < len(lines):
+            next_l = lines[i + 1].strip()
+            next_low = next_l.lower()
+            if any(title_w in next_low for title_w in [
+                "engineer", "developer", "manager", "lead", "architect", "scientist", 
+                "consultant", "analyst", "director", "officer", "intern", "student", 
+                "designer", "specialist", "founder", "cto", "ceo", "|", "•", " at "
+            ]):
+                score += 35
+
+        # Check line i+2: Location
+        if i + 2 < len(lines):
+            loc_l = lines[i + 2].strip()
+            loc_low = loc_l.lower()
+            if any(country_w in loc_low for country_w in ["india", "states", "usa", "area", "bengaluru", "pune", "mumbai", "london", "canada", "york", "francisco", "germany", "singapore", "australia"]) or "," in loc_l:
+                score += 30
+
+        # Check line i+3 or i+4: "Summary" or "Experience"
+        for offset in [2, 3, 4]:
+            if i + offset < len(lines) and lines[i + offset].strip().lower() in ["summary", "about", "experience"]:
+                score += 40
+
+        if score > best_score:
+            best_score = score
+            best_idx = i
+
+    name = ""
+    headline = ""
+    location = ""
+
+    if best_idx != -1 and best_score >= 30:
+        name = lines[best_idx].strip()
+        if best_idx + 1 < len(lines):
+            headline = lines[best_idx + 1].strip()
+        if best_idx + 2 < len(lines):
+            cand_loc = lines[best_idx + 2].strip()
+            if cand_loc.lower() not in ["summary", "about", "experience"]:
+                location = cand_loc
+
+    # Fallback if no high score candidate was found (e.g. pasted snippet or 1-column format)
+    if not name and lines:
+        for idx, line in enumerate(lines[:6]):
+            low = line.strip().lower()
+            if low not in ["contact", "top skills", "languages", "certifications"] and "@" not in line and "linkedin" not in low:
+                name = line.strip()
+                if idx + 1 < len(lines):
+                    headline = lines[idx + 1].strip()
+                if idx + 2 < len(lines):
+                    location = lines[idx + 2].strip()
+                break
+
+    return name, headline, location
+
+
 def parse_linkedin_text(raw_text: str) -> Dict[str, Any]:
     """
     Parse LinkedIn profile text (exported PDF or pasted profile)
@@ -88,7 +195,7 @@ def parse_linkedin_text(raw_text: str) -> Dict[str, Any]:
             "name": "",
             "headline": "",
             "location": "",
-            "country": "India",
+            "country": "",
             "city": "",
             "email": "",
             "phone": "",
@@ -100,79 +207,72 @@ def parse_linkedin_text(raw_text: str) -> Dict[str, Any]:
             "raw_text": raw_text
         }
 
-    # Line 0: Candidate Name
-    name = lines[0] if len(lines) > 0 else ""
-
-    # Line 1: Headline
-    headline = lines[1] if len(lines) > 1 and len(lines[1]) < 220 else ""
-
-    # Line 2-4: Often location in LinkedIn PDF export
-    location = ""
-    for candidate_line in lines[2:6]:
-        # Check if line looks like a location (e.g., contains comma or known country/city)
-        low = candidate_line.lower()
-        if any(w in low for w in ["india", "states", "usa", "area", "bengaluru", "pune", "mumbai", "london", "canada", "york", "francisco", "germany"]) or ("," in candidate_line and len(candidate_line) < 80):
-            if not any(header in low for header in ["contact", "summary", "experience", "education", "skills"]):
-                location = candidate_line
-                break
-
-    country, city = detect_country_and_city(location)
-
     # Extract Contact Info via regex
     email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", raw_text)
-    email = email_match.group(0) if email_match else ""
+    email = email_match.group(0).strip() if email_match else ""
 
     phone_match = re.search(r"(\+?\d{1,4}[-.\s]?)?(\(?\d{2,4}\)?[-.\s]?)?\d{3,4}[-.\s]?\d{3,4}", raw_text)
     phone = phone_match.group(0).strip() if phone_match else ""
 
-    in_match = re.search(r"(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[a-zA-Z0-9_-]+", raw_text)
-    linkedin_url = in_match.group(0) if in_match else ""
-    if linkedin_url and not linkedin_url.startswith("http"):
-        linkedin_url = "https://" + linkedin_url
+    in_match = re.search(r"(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/([a-zA-Z0-9_-]+)", raw_text)
+    linkedin_url = ""
+    linkedin_slug = ""
+    if in_match:
+        linkedin_slug = in_match.group(1)
+        linkedin_url = f"https://www.linkedin.com/in/{linkedin_slug}"
 
-    about = ""
+    # Extract Top Skills from LinkedIn PDF sidebar
+    skills = []
+    in_skills_sec = False
+    for line in lines:
+        low = line.lower()
+        if low in ["top skills", "skills", "core competencies"]:
+            in_skills_sec = True
+            continue
+        elif in_skills_sec and (low in ["languages", "certifications", "summary", "experience", "education", "contact"] or len(line) > 60):
+            in_skills_sec = False
+        elif in_skills_sec:
+            if not any(h in low for h in ["(professional", "(native", "(elementary", "(bilingual"]):
+                skills.append(line.strip())
+
+    # Find Candidate Name, Headline, Location reliably
+    name, headline, location = find_candidate_block(lines, linkedin_slug=linkedin_slug, email=email)
+    country, city = detect_country_and_city(location)
+
+    # Parse Summary, Experience, Education
+    about_lines = []
     experience_lines = []
     education_lines = []
-    skills = []
-
-    current_section = None
-    section_patterns = {
-        "summary": re.compile(r"^(summary|about|profile|overview)$", re.IGNORECASE),
-        "experience": re.compile(r"^(experience|work experience|employment history)$", re.IGNORECASE),
-        "education": re.compile(r"^(education|academic history)$", re.IGNORECASE),
-        "skills": re.compile(r"^(skills|top skills|core competencies|technologies)$", re.IGNORECASE)
-    }
+    current_sec = None
 
     for line in lines:
-        matched = False
-        for sec, pat in section_patterns.items():
-            if pat.match(line):
-                current_section = sec
-                matched = True
-                break
-        if matched:
+        low = line.lower()
+        if low in ["summary", "about", "about me", "profile summary"]:
+            current_sec = "about"
+            continue
+        elif low in ["experience", "work experience", "employment history", "professional experience"]:
+            current_sec = "experience"
+            continue
+        elif low in ["education", "academic history"]:
+            current_sec = "education"
+            continue
+        elif low in ["certifications", "licenses & certifications", "languages", "publications", "honors-awards"]:
+            current_sec = "other"
             continue
 
-        if current_section == "summary":
-            about += (" " + line if about else line)
-        elif current_section == "experience":
+        if current_sec == "about":
+            about_lines.append(line)
+        elif current_sec == "experience":
             experience_lines.append(line)
-        elif current_section == "education":
+        elif current_sec == "education":
             education_lines.append(line)
-        elif current_section == "skills":
-            sub_skills = [s.strip() for s in re.split(r"[,•|\n]", line) if s.strip()]
-            skills.extend(sub_skills)
-
-    # Fallback if sections were not cleanly labeled
-    if not about and not experience_lines:
-        about = "\n".join(lines[2:6]) if len(lines) > 5 else ""
-        experience_lines = lines[6:] if len(lines) > 6 else []
 
     # Clean up skills duplicates
     unique_skills = []
     for s in skills:
-        if s.lower() not in [u.lower() for u in unique_skills] and len(s) < 50:
-            unique_skills.append(s)
+        cleaned_s = s.strip()
+        if cleaned_s and cleaned_s.lower() not in [u.lower() for u in unique_skills] and len(cleaned_s) < 50:
+            unique_skills.append(cleaned_s)
 
     return {
         "name": name,
@@ -183,7 +283,7 @@ def parse_linkedin_text(raw_text: str) -> Dict[str, Any]:
         "email": email,
         "phone": phone,
         "linkedin_url": linkedin_url,
-        "about": about.strip(),
+        "about": "\n".join(about_lines).strip(),
         "experience": "\n".join(experience_lines).strip(),
         "skills": unique_skills,
         "education": "\n".join(education_lines).strip(),
