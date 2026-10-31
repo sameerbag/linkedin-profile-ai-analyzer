@@ -153,6 +153,45 @@ else:
     if not hasattr(st.session_state.applicant_profile, "skills"):
         st.session_state.applicant_profile.skills = []
 
+# Guardrail: Purge any legacy poisoned state if a skill or tech keyword was stored as a name or city
+KNOWN_TECH_TERMS = {
+    "cascading style sheets (css)", "css", "html", "solution architecture", 
+    "ai", "machine learning", "python", "java", "docker", "kubernetes", 
+    "top skills", "skills", "cloud", "aws", "react"
+}
+cur_name = getattr(st.session_state.applicant_profile, "full_name", "").lower().strip()
+cur_city = getattr(st.session_state.applicant_profile, "city", "").lower().strip()
+if cur_name in KNOWN_TECH_TERMS:
+    st.session_state.applicant_profile.full_name = ""
+    st.session_state["profile_loaded"] = False
+    st.session_state["last_processed_pdf_name"] = ""
+    if "f_full_name" in st.session_state:
+        del st.session_state["f_full_name"]
+if cur_city in KNOWN_TECH_TERMS:
+    st.session_state.applicant_profile.city = ""
+    if "f_city" in st.session_state:
+        del st.session_state["f_city"]
+
+
+def sync_applicant_to_widgets(p: ApplicantProfile):
+    """Synchronize parsed applicant profile into Streamlit widget session state."""
+    st.session_state["f_full_name"] = p.full_name
+    st.session_state["f_email"] = p.email
+    st.session_state["f_phone"] = p.phone
+    st.session_state["f_country"] = p.country
+    st.session_state["f_city"] = p.city
+    st.session_state["f_linkedin"] = p.linkedin_url
+    st.session_state["f_github"] = p.github_url
+    st.session_state["f_portfolio"] = p.portfolio_url
+    st.session_state["f_headline"] = p.headline
+    st.session_state["f_skills"] = ", ".join(p.skills)
+    st.session_state["f_about"] = p.about
+    st.session_state["f_experience"] = p.experience
+    st.session_state["setup_city_input"] = p.city
+    if st.session_state.get("target_role_query"):
+        st.session_state["setup_role_input"] = st.session_state.target_role_query
+
+
 if "profile_loaded" not in st.session_state:
     st.session_state.profile_loaded = False
 
@@ -218,6 +257,10 @@ if st.sidebar.button("📄 Attach / Switch LinkedIn PDF", use_container_width=Tr
     st.session_state.location_configured = False
     st.session_state.profile_loaded = False
     st.session_state.last_processed_pdf_name = ""
+    st.session_state.applicant_profile = ApplicantProfile()
+    for k in ["f_full_name", "f_city", "f_country", "f_headline", "f_phone", "f_email", "f_linkedin", "f_skills", "f_about", "f_experience", "setup_city_input", "setup_role_input"]:
+        if k in st.session_state:
+            del st.session_state[k]
     st.rerun()
 
 
@@ -241,7 +284,8 @@ if app_mode == "🔍 Job Search & Best-Fit Matches":
                 launch_pdf = st.file_uploader("Upload LinkedIn Profile PDF:", type=["pdf"], key="launch_pdf_uploader")
                 if launch_pdf is not None:
                     # Auto-extract immediately when PDF is attached or button clicked
-                    should_parse = (st.session_state.get("last_processed_pdf_name") != launch_pdf.name)
+                    p = st.session_state.applicant_profile
+                    should_parse = (st.session_state.get("last_processed_pdf_name") != launch_pdf.name) or not p.full_name
                     btn_clicked = st.button("🚀 Parse & Extract from Attached PDF", type="primary", use_container_width=True)
                     if should_parse or btn_clicked:
                         with st.spinner("Extracting details & detecting location directly from your PDF..."):
@@ -268,6 +312,7 @@ if app_mode == "🔍 Job Search & Best-Fit Matches":
                             st.session_state.last_processed_pdf_name = launch_pdf.name
                             if p.headline:
                                 st.session_state.target_role_query = p.headline.split("|")[0].split("-")[0].strip()
+                            sync_applicant_to_widgets(p)
                             st.session_state.discovered_jobs = []
                             loc_str = f"{p.city}, {p.country}".strip(", ") or p.location or "Location Detected"
                             st.success(f"✅ Loaded profile from PDF: **{p.full_name or 'Candidate'}** | 📍 Location: **{loc_str}** | 🎯 Role: **{st.session_state.target_role_query}**")
@@ -644,6 +689,7 @@ elif app_mode == "💼 LinkedIn Profile & Applicant Setup":
                     st.session_state.last_processed_pdf_name = uploaded_pdf.name
                     if p.headline:
                         st.session_state.target_role_query = p.headline.split("|")[0].split("-")[0].strip()
+                    sync_applicant_to_widgets(p)
                     st.session_state.discovered_jobs = []
                     loc_display = f"{p.city}, {p.country}".strip(", ") or p.location or "Location detected"
                     st.success(f"✅ LinkedIn PDF successfully parsed! Loaded {p.full_name or 'Candidate'} | Location: {loc_display}")
@@ -657,23 +703,24 @@ elif app_mode == "💼 LinkedIn Profile & Applicant Setup":
         st.markdown("#### Candidate Details for Auto-Filling Job Forms")
         col_c1, col_c2 = st.columns(2)
         with col_c1:
-            p.full_name = st.text_input("Full Name:", value=p.full_name)
-            p.email = st.text_input("Email:", value=p.email)
-            p.phone = st.text_input("Phone:", value=p.phone)
-            p.country = st.text_input("Country:", value=p.country)
-            p.city = st.text_input("City / State:", value=p.city)
+            p.full_name = st.text_input("Full Name:", value=st.session_state.get("f_full_name", p.full_name), key="f_full_name")
+            p.email = st.text_input("Email:", value=st.session_state.get("f_email", p.email), key="f_email")
+            p.phone = st.text_input("Phone:", value=st.session_state.get("f_phone", p.phone), key="f_phone")
+            p.country = st.text_input("Country:", value=st.session_state.get("f_country", p.country), key="f_country")
+            p.city = st.text_input("City / State:", value=st.session_state.get("f_city", p.city), key="f_city")
         with col_c2:
-            p.linkedin_url = st.text_input("LinkedIn Profile URL:", value=p.linkedin_url)
-            p.github_url = st.text_input("GitHub URL:", value=p.github_url)
-            p.portfolio_url = st.text_input("Portfolio / Website URL:", value=p.portfolio_url)
-            p.work_authorization = st.text_input("Work Authorization:", value=p.work_authorization)
-            p.expected_salary = st.text_input("Expected Salary:", value=p.expected_salary)
+            p.linkedin_url = st.text_input("LinkedIn Profile URL:", value=st.session_state.get("f_linkedin", p.linkedin_url), key="f_linkedin")
+            p.github_url = st.text_input("GitHub URL:", value=st.session_state.get("f_github", p.github_url), key="f_github")
+            p.portfolio_url = st.text_input("Portfolio / Website URL:", value=st.session_state.get("f_portfolio", p.portfolio_url), key="f_portfolio")
+            p.work_authorization = st.text_input("Work Authorization:", value=p.work_authorization, key="f_work_auth")
+            p.expected_salary = st.text_input("Expected Salary:", value=p.expected_salary, key="f_salary")
 
         st.markdown("#### Resume / Profile Sections")
-        p.headline = st.text_input("Headline (Max 220 chars):", value=p.headline)
-        p.skills = [s.strip() for s in st.text_input("Skills (comma-separated):", value=", ".join(p.skills)).split(",") if s.strip()]
-        p.about = st.text_area("About / Summary:", value=p.about, height=120)
-        p.experience = st.text_area("Experience (Bullet points):", value=p.experience, height=140)
+        p.headline = st.text_input("Headline (Max 220 chars):", value=st.session_state.get("f_headline", p.headline), key="f_headline")
+        skills_str = st.text_input("Skills (comma-separated):", value=st.session_state.get("f_skills", ", ".join(p.skills)), key="f_skills")
+        p.skills = [s.strip() for s in skills_str.split(",") if s.strip()]
+        p.about = st.text_area("About / Summary:", value=st.session_state.get("f_about", p.about), key="f_about", height=120)
+        p.experience = st.text_area("Experience (Bullet points):", value=st.session_state.get("f_experience", p.experience), key="f_experience", height=140)
 
     with tab_audit:
         h_audit = score_headline(p.headline)

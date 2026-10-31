@@ -288,6 +288,51 @@ def parse_linkedin_text(raw_text: str) -> Dict[str, Any]:
         if cleaned_s and cleaned_s.lower() not in [u.lower() for u in unique_skills] and len(cleaned_s) < 50:
             unique_skills.append(cleaned_s)
 
+    # 7. Strict Guardrails: Name and City must NEVER be a skill or tech keyword
+    KNOWN_TECH_TERMS = {
+        "cascading style sheets (css)", "css", "html", "solution architecture", 
+        "ai", "machine learning", "python", "java", "docker", "kubernetes", 
+        "top skills", "skills", "cloud", "aws", "react", "c++", "c#", "angular",
+        "javascript", "typescript", "devops", "sql", "nosql", "git", "linux"
+    }
+
+    if name:
+        low_name = name.lower().strip()
+        if low_name in KNOWN_TECH_TERMS or any(low_name == s.lower().strip() for s in unique_skills):
+            name = ""
+
+    # If name is still empty, search for candidate name from LinkedIn slug or email
+    if not name and (linkedin_slug or email):
+        target_token = linkedin_slug or email.split("@")[0]
+        target_clean = re.sub(r"[0-9\._-]+", "", target_token).lower()
+        for l in lines:
+            l_clean = re.sub(r"[^a-zA-Z]+", "", l).lower()
+            if l_clean == target_clean and 2 <= len(l.split()) <= 4:
+                name = l.strip()
+                break
+
+    # If name is still empty, check candidate block right before headline
+    if not name and headline:
+        for i, l in enumerate(lines):
+            if headline in l or l in headline:
+                if i > 0:
+                    prev_l = lines[i-1].strip()
+                    if 2 <= len(prev_l.split()) <= 4 and prev_l.lower() not in KNOWN_TECH_TERMS:
+                        name = prev_l
+                        break
+
+    # Guardrail: City must never be a skill or tech keyword
+    if city:
+        low_city = city.lower().strip()
+        if low_city in KNOWN_TECH_TERMS or any(low_city == s.lower().strip() for s in unique_skills):
+            city = ""
+
+    if not city:
+        for known_city in ["Pune", "Bengaluru", "Bangalore", "Mumbai", "Hyderabad", "Chennai", "Delhi", "Noida", "Gurgaon", "Gurugram", "San Francisco", "New York", "London", "Toronto", "Nasik"]:
+            if re.search(r"\b" + re.escape(known_city) + r"\b", raw_text, re.IGNORECASE):
+                city = known_city
+                break
+
     return {
         "name": name,
         "headline": headline,
