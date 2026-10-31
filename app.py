@@ -145,6 +145,13 @@ st.markdown("""
 # Initialize Session State
 if "applicant_profile" not in st.session_state:
     st.session_state.applicant_profile = ApplicantProfile()
+else:
+    # Ensure backward-compatibility for active sessions during hot-reload
+    for field_name in ["location", "current_location", "country", "city", "state_province", "postal_code", "email", "phone", "headline", "about", "experience"]:
+        if not hasattr(st.session_state.applicant_profile, field_name):
+            setattr(st.session_state.applicant_profile, field_name, "")
+    if not hasattr(st.session_state.applicant_profile, "skills"):
+        st.session_state.applicant_profile.skills = []
 
 if "profile_loaded" not in st.session_state:
     st.session_state.profile_loaded = False
@@ -202,7 +209,7 @@ with st.sidebar.expander("🔑 AI Settings (Gemini API)", expanded=False):
 
 prof = st.session_state.applicant_profile
 if prof.full_name or prof.headline:
-    loc_display = f"{prof.city}, {prof.country}".strip(", ") if (prof.city or prof.country) else (prof.location or "Location not set")
+    loc_display = f"{prof.city}, {prof.country}".strip(", ") if (prof.city or prof.country) else (getattr(prof, "location", "") or "Location not set")
     st.sidebar.markdown(f"**Current Applicant:**  \n👤 **{prof.full_name or 'Uploaded Applicant'}**  \n📍 **{loc_display}**")
 else:
     st.sidebar.markdown("**Current Applicant:**  \n👤 *No PDF attached yet*  \n📍 *Attach LinkedIn PDF below*")
@@ -303,7 +310,7 @@ if app_mode == "🔍 Job Search & Best-Fit Matches":
             country_idx = country_options.index(active_country)
             selected_country = st.selectbox("Country:", country_options, index=country_idx)
         with f3:
-            active_city = prof.city or prof.location or ""
+            active_city = prof.city or getattr(prof, "location", "") or ""
             location_query = st.text_input("City / Area (Optional):", value=active_city, placeholder="e.g. Pune, Bengaluru, Remote")
         with f4:
             work_mode = st.selectbox("Work Type:", ["Remote or Any", "Remote Only", "Hybrid / On-site"], index=0)

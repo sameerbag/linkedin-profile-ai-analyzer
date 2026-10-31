@@ -47,6 +47,7 @@ class ApplicantProfile:
     phone: str = ""
     
     # Location
+    location: str = ""
     country: str = ""
     city: str = ""
     state_province: str = ""
