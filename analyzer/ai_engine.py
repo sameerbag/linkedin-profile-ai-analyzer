@@ -3,6 +3,41 @@ import re
 from typing import Dict, List, Any
 
 
+def call_claude(prompt: str, api_key: str = None, model: str = "claude-3-5-sonnet-20241022") -> str:
+    """
+    Invokes Anthropic Claude API via direct HTTPS using requests.
+    Supports Claude 3.5 Sonnet, Claude 3.7 Sonnet, Claude 3.5 Haiku, etc.
+    """
+    key = api_key or os.getenv("ANTHROPIC_API_KEY") or os.getenv("CLAUDE_API_KEY")
+    if not key:
+        return ""
+    
+    try:
+        import requests
+        url = "https://api.anthropic.com/v1/messages"
+        headers = {
+            "x-api-key": key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json"
+        }
+        data = {
+            "model": model,
+            "max_tokens": 1500,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ]
+        }
+        resp = requests.post(url, headers=headers, json=data, timeout=30)
+        if resp.status_code == 200:
+            result = resp.json()
+            content = result.get("content", [])
+            if content and isinstance(content, list):
+                return content[0].get("text", "").strip()
+    except Exception:
+        pass
+    return ""
+
+
 def call_gemini(prompt: str, api_key: str = None) -> str:
     """Invokes Gemini using google.genai or legacy google.generativeai if available."""
     key = api_key or os.getenv("GEMINI_API_KEY")
@@ -36,10 +71,47 @@ def call_gemini(prompt: str, api_key: str = None) -> str:
     return ""
 
 
+def call_llm(prompt: str, api_key: str = None, provider: str = "auto") -> str:
+    """
+    Unified LLM caller supporting both Anthropic Claude and Google Gemini.
+    Provider can be 'claude', 'gemini', or 'auto' (detects based on key format or env vars).
+    """
+    claude_key = os.getenv("ANTHROPIC_API_KEY") or os.getenv("CLAUDE_API_KEY")
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    key = api_key or claude_key or gemini_key
+    if not key:
+        return ""
+
+    # Check if provider explicitly requested or key format indicates Claude
+    is_claude = (
+        provider.lower() in ("claude", "anthropic")
+        or key.startswith("sk-ant")
+        or (bool(claude_key) and not gemini_key and provider == "auto")
+    )
+
+    if is_claude:
+        resp = call_claude(prompt, api_key=key)
+        if resp:
+            return resp
+
+    # Try Gemini
+    resp = call_gemini(prompt, api_key=key)
+    if resp:
+        return resp
+
+    # Fallback to Claude if Gemini failed
+    if not is_claude:
+        resp = call_claude(prompt, api_key=key)
+        if resp:
+            return resp
+
+    return ""
+
+
 def generate_headlines(current_headline: str, target_role: str, top_skills: List[str], api_key: str = None) -> List[Dict[str, str]]:
     """
     Generates 5 distinct high-converting LinkedIn headline variations.
-    Uses Gemini LLM if key is present, otherwise uses intelligent parametric templates.
+    Uses Claude or Gemini LLM if key is present, otherwise uses intelligent parametric templates.
     """
     skills_str = ", ".join(top_skills[:5]) if top_skills else "Full Lifecycle Development, Architecture"
     
@@ -57,7 +129,7 @@ def generate_headlines(current_headline: str, target_role: str, top_skills: List
     4. [The Storyteller & Thought Leader] - Headline text
     5. [The Minimalist Authority] - Headline text
     """
-    ai_resp = call_gemini(prompt, api_key)
+    ai_resp = call_llm(prompt, api_key)
     if ai_resp:
         try:
             lines = [line.strip() for line in ai_resp.splitlines() if line.strip()]
@@ -133,7 +205,7 @@ def generate_about_rewrites(current_about: str, target_role: str, top_skills: Li
     ### 3. Story-Driven Style
     [content]
     """
-    ai_resp = call_gemini(prompt, api_key)
+    ai_resp = call_llm(prompt, api_key)
     if ai_resp:
         try:
             sections = re.split(r"###\s*\d+\.\s*", ai_resp)
@@ -219,7 +291,7 @@ def transform_bullet_points(bullets: str, api_key: str = None) -> List[Dict[str,
     Optimized: [text]
     Formula Breakdown: [Action + Metric + Impact explanation]
     """
-    ai_resp = call_gemini(prompt, api_key)
+    ai_resp = call_llm(prompt, api_key)
     if ai_resp:
         try:
             blocks = ai_resp.split("Original:")
@@ -273,7 +345,7 @@ def generate_linkedin_post_ideas(role: str, skills: List[str], experience_text: 
        Concept: [Core takeaway]
        Opening Lines: [First 2 lines that stop the scroll]
     """
-    ai_resp = call_gemini(prompt, api_key)
+    ai_resp = call_llm(prompt, api_key)
     if ai_resp:
         try:
             return [{"title": f"Post Idea #{i+1}", "content": chunk.strip()} for i, chunk in enumerate(ai_resp.split("\n\n")[:5]) if chunk.strip()]

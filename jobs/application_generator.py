@@ -1,6 +1,6 @@
 from typing import Dict, Any, List
 from .models import JobPosting, ApplicantProfile
-from analyzer.ai_engine import call_gemini
+from analyzer.ai_engine import call_llm
 
 
 def generate_tailored_cover_letter(
@@ -33,7 +33,7 @@ def generate_tailored_cover_letter(
         3. Professional closing with enthusiasm for an interview.
         Keep it under 280 words. Professional, confident, and direct.
         """
-        ai_resp = call_gemini(prompt, api_key)
+        ai_resp = call_llm(prompt, api_key)
         if ai_resp:
             return ai_resp.strip()
 

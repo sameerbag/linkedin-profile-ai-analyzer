@@ -1,7 +1,7 @@
 import re
 from typing import List, Dict, Any, Tuple
 from .models import JobPosting, ApplicantProfile
-from analyzer.ai_engine import call_gemini
+from analyzer.ai_engine import call_llm
 
 
 TECH_SKILL_LEXICON = [
@@ -103,7 +103,7 @@ def compute_job_fit(job: JobPosting, profile: ApplicantProfile, api_key: str = N
         Missing Skills: {', '.join(missing[:4])}
         Fit Score: {fit_score}%
         """
-        ai_resp = call_gemini(prompt, api_key)
+        ai_resp = call_llm(prompt, api_key)
         if ai_resp:
             summary = ai_resp.strip()
 

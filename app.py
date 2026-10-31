@@ -147,11 +147,17 @@ if "applicant_profile" not in st.session_state:
     st.session_state.applicant_profile = ApplicantProfile()
 else:
     # Ensure backward-compatibility for active sessions during hot-reload
-    for field_name in ["location", "current_location", "country", "city", "state_province", "postal_code", "email", "phone", "headline", "about", "experience"]:
+    for field_name in [
+        "location", "current_location", "country", "city", "state_province",
+        "postal_code", "email", "phone", "headline", "about", "experience",
+        "education", "years_of_experience"
+    ]:
         if not hasattr(st.session_state.applicant_profile, field_name):
             setattr(st.session_state.applicant_profile, field_name, "")
     if not hasattr(st.session_state.applicant_profile, "skills"):
         st.session_state.applicant_profile.skills = []
+    if not hasattr(st.session_state.applicant_profile, "certifications"):
+        st.session_state.applicant_profile.certifications = []
 
 # Guardrail: Purge any legacy poisoned state if a skill or tech keyword was stored as a name or city
 KNOWN_TECH_TERMS = {
@@ -174,22 +180,74 @@ if cur_city in KNOWN_TECH_TERMS:
 
 
 def sync_applicant_to_widgets(p: ApplicantProfile):
-    """Synchronize parsed applicant profile into Streamlit widget session state."""
+    """Synchronize parsed applicant profile into Streamlit widget session state across all tabs."""
     st.session_state["f_full_name"] = p.full_name
     st.session_state["f_email"] = p.email
     st.session_state["f_phone"] = p.phone
     st.session_state["f_country"] = p.country
     st.session_state["f_city"] = p.city
+    st.session_state["f_location"] = p.location or f"{p.city}, {p.country}".strip(", ")
     st.session_state["f_linkedin"] = p.linkedin_url
     st.session_state["f_github"] = p.github_url
     st.session_state["f_portfolio"] = p.portfolio_url
+    st.session_state["f_work_auth"] = p.work_authorization
+    st.session_state["f_salary"] = p.expected_salary
     st.session_state["f_headline"] = p.headline
     st.session_state["f_skills"] = ", ".join(p.skills)
     st.session_state["f_about"] = p.about
     st.session_state["f_experience"] = p.experience
+    st.session_state["f_education"] = p.education
+    st.session_state["f_certifications"] = ", ".join(getattr(p, "certifications", []))
+    st.session_state["f_years_exp"] = getattr(p, "years_of_experience", "")
+
+    # Step 1 onboarding setup inputs
     st.session_state["setup_city_input"] = p.city
+    if p.country:
+        st.session_state["setup_country_select"] = p.country
     if st.session_state.get("target_role_query"):
         st.session_state["setup_role_input"] = st.session_state.target_role_query
+
+    # Section 2 Auto-Apply Quick-Fill Matrix fields
+    st.session_state["c_name"] = p.full_name
+    st.session_state["c_email"] = p.email
+    st.session_state["c_phone"] = p.phone
+    st.session_state["c_in"] = p.linkedin_url
+    st.session_state["c_gh"] = p.github_url
+    st.session_state["c_port"] = p.portfolio_url
+    st.session_state["c_auth"] = p.work_authorization
+    st.session_state["c_not"] = p.notice_period
+
+
+def load_parsed_profile_into_session(parsed: dict, pdf_name: str):
+    """Loads parsed PDF dictionary into session state applicant profile and synchronizes widgets."""
+    p = st.session_state.applicant_profile
+    p.full_name = parsed.get("name", "")
+    p.first_name = parsed.get("first_name", "") or (p.full_name.split()[0] if p.full_name else "")
+    p.last_name = parsed.get("last_name", "") or (" ".join(p.full_name.split()[1:]) if len(p.full_name.split()) > 1 else "")
+    p.headline = parsed.get("headline", "")
+    p.location = parsed.get("location", "")
+    p.country = parsed.get("country", "")
+    p.city = parsed.get("city", "")
+    p.postal_code = parsed.get("postal_code", "")
+    p.current_location = p.location or f"{p.city}, {p.country}".strip(", ")
+    p.email = parsed.get("email", "")
+    p.phone = parsed.get("phone", "")
+    p.linkedin_url = parsed.get("linkedin_url", "")
+    p.portfolio_url = parsed.get("portfolio_url", "")
+    p.years_of_experience = parsed.get("years_of_experience", "")
+    p.about = parsed.get("about", "")
+    p.experience = parsed.get("experience", "")
+    p.skills = parsed.get("skills", [])
+    p.education = parsed.get("education", "")
+    p.certifications = parsed.get("certifications", [])
+
+    st.session_state.profile_loaded = True
+    st.session_state.location_configured = True
+    st.session_state.last_processed_pdf_name = pdf_name
+    if p.headline:
+        st.session_state.target_role_query = p.headline.split("|")[0].split("-")[0].strip()
+    sync_applicant_to_widgets(p)
+    st.session_state.discovered_jobs = []
 
 
 if "profile_loaded" not in st.session_state:
@@ -234,17 +292,38 @@ app_mode = st.sidebar.radio(
 
 st.sidebar.markdown("---")
 
-with st.sidebar.expander("🔑 AI Settings (Gemini API)", expanded=False):
-    api_key_input = st.text_input(
-        "Google Gemini API Key (Optional):",
-        value=os.getenv("GEMINI_API_KEY", ""),
-        type="password",
-        help="Leave blank to use the built-in offline NLP engine. Provide a key for personalized generative AI rewrites."
+with st.sidebar.expander("🔑 AI Model & Engine Settings", expanded=False):
+    ai_provider = st.selectbox(
+        "AI Engine:",
+        ["Anthropic Claude (Recommended)", "Google Gemini", "Offline NLP Engine (No API Key)"],
+        index=0,
+        help="Claude is recommended for state-of-the-art reasoning, tailored cover letters, and candidate fit analysis."
     )
-    if api_key_input:
-        st.caption("🟢 Live Gemini AI Engine Enabled")
+    if "Claude" in ai_provider:
+        api_key_input = st.text_input(
+            "Anthropic API Key:",
+            value=os.getenv("ANTHROPIC_API_KEY", os.getenv("CLAUDE_API_KEY", "")),
+            type="password",
+            help="Get your key at console.anthropic.com. Leave empty to use offline NLP engine."
+        )
+        if api_key_input:
+            st.caption("🟢 Live Claude 3.5 / 3.7 Sonnet AI Active")
+        else:
+            st.caption("⚡ Offline Intelligent NLP Active (Add key for Claude)")
+    elif "Gemini" in ai_provider:
+        api_key_input = st.text_input(
+            "Google Gemini API Key:",
+            value=os.getenv("GEMINI_API_KEY", ""),
+            type="password",
+            help="Get your key at aistudio.google.com. Leave empty to use offline NLP engine."
+        )
+        if api_key_input:
+            st.caption("🟢 Live Gemini AI Engine Active")
+        else:
+            st.caption("⚡ Offline Intelligent NLP Active")
     else:
-        st.caption("⚡ Offline Intelligent NLP Engine Active")
+        api_key_input = ""
+        st.caption("⚡ Offline Intelligent NLP Active (100% private, no API calls)")
 
 prof = st.session_state.applicant_profile
 if prof.full_name or prof.headline:
@@ -258,7 +337,13 @@ if st.sidebar.button("📄 Attach / Switch LinkedIn PDF", use_container_width=Tr
     st.session_state.profile_loaded = False
     st.session_state.last_processed_pdf_name = ""
     st.session_state.applicant_profile = ApplicantProfile()
-    for k in ["f_full_name", "f_city", "f_country", "f_headline", "f_phone", "f_email", "f_linkedin", "f_skills", "f_about", "f_experience", "setup_city_input", "setup_role_input"]:
+    for k in [
+        "f_full_name", "f_city", "f_country", "f_location", "f_headline", "f_phone", "f_email",
+        "f_linkedin", "f_github", "f_portfolio", "f_work_auth", "f_salary", "f_skills",
+        "f_about", "f_experience", "f_education", "f_certifications", "f_years_exp",
+        "setup_city_input", "setup_role_input", "setup_country_select",
+        "c_name", "c_email", "c_phone", "c_in", "c_gh", "c_port", "c_auth", "c_not"
+    ]:
         if k in st.session_state:
             del st.session_state[k]
     st.rerun()
@@ -291,29 +376,8 @@ if app_mode == "🔍 Job Search & Best-Fit Matches":
                         with st.spinner("Extracting details & detecting location directly from your PDF..."):
                             raw_text = extract_text_from_pdf(launch_pdf)
                             parsed = parse_linkedin_text(raw_text)
+                            load_parsed_profile_into_session(parsed, launch_pdf.name)
                             p = st.session_state.applicant_profile
-                            p.full_name = parsed.get("name", "")
-                            p.first_name = p.full_name.split()[0] if p.full_name else ""
-                            p.last_name = p.full_name.split()[-1] if len(p.full_name.split()) > 1 else ""
-                            p.headline = parsed.get("headline", "")
-                            p.location = parsed.get("location", "")
-                            p.country = parsed.get("country", "")
-                            p.city = parsed.get("city", "")
-                            p.current_location = p.location or f"{p.city}, {p.country}".strip(", ")
-                            p.email = parsed.get("email", "")
-                            p.phone = parsed.get("phone", "")
-                            p.linkedin_url = parsed.get("linkedin_url", "")
-                            p.about = parsed.get("about", "")
-                            p.experience = parsed.get("experience", "")
-                            p.skills = parsed.get("skills", [])
-                            p.education = parsed.get("education", "")
-                            st.session_state.profile_loaded = True
-                            st.session_state.location_configured = True
-                            st.session_state.last_processed_pdf_name = launch_pdf.name
-                            if p.headline:
-                                st.session_state.target_role_query = p.headline.split("|")[0].split("-")[0].strip()
-                            sync_applicant_to_widgets(p)
-                            st.session_state.discovered_jobs = []
                             loc_str = f"{p.city}, {p.country}".strip(", ") or p.location or "Location Detected"
                             st.success(f"✅ Loaded profile from PDF: **{p.full_name or 'Candidate'}** | 📍 Location: **{loc_str}** | 🎯 Role: **{st.session_state.target_role_query}**")
                             st.rerun()
@@ -668,29 +732,8 @@ elif app_mode == "💼 LinkedIn Profile & Applicant Setup":
                 with st.spinner("Extracting sections directly from PDF..."):
                     raw_text = extract_text_from_pdf(uploaded_pdf)
                     parsed = parse_linkedin_text(raw_text)
+                    load_parsed_profile_into_session(parsed, uploaded_pdf.name)
                     p = st.session_state.applicant_profile
-                    p.full_name = parsed.get("name", "")
-                    p.first_name = p.full_name.split()[0] if p.full_name else ""
-                    p.last_name = p.full_name.split()[-1] if len(p.full_name.split()) > 1 else ""
-                    p.headline = parsed.get("headline", "")
-                    p.location = parsed.get("location", "")
-                    p.country = parsed.get("country", "")
-                    p.city = parsed.get("city", "")
-                    p.current_location = p.location or f"{p.city}, {p.country}".strip(", ")
-                    p.email = parsed.get("email", "")
-                    p.phone = parsed.get("phone", "")
-                    p.linkedin_url = parsed.get("linkedin_url", "")
-                    p.about = parsed.get("about", "")
-                    p.experience = parsed.get("experience", "")
-                    p.skills = parsed.get("skills", [])
-                    p.education = parsed.get("education", "")
-                    st.session_state.profile_loaded = True
-                    st.session_state.location_configured = True
-                    st.session_state.last_processed_pdf_name = uploaded_pdf.name
-                    if p.headline:
-                        st.session_state.target_role_query = p.headline.split("|")[0].split("-")[0].strip()
-                    sync_applicant_to_widgets(p)
-                    st.session_state.discovered_jobs = []
                     loc_display = f"{p.city}, {p.country}".strip(", ") or p.location or "Location detected"
                     st.success(f"✅ LinkedIn PDF successfully parsed! Loaded {p.full_name or 'Candidate'} | Location: {loc_display}")
                     st.rerun()
@@ -707,20 +750,35 @@ elif app_mode == "💼 LinkedIn Profile & Applicant Setup":
             p.email = st.text_input("Email:", value=st.session_state.get("f_email", p.email), key="f_email")
             p.phone = st.text_input("Phone:", value=st.session_state.get("f_phone", p.phone), key="f_phone")
             p.country = st.text_input("Country:", value=st.session_state.get("f_country", p.country), key="f_country")
-            p.city = st.text_input("City / State:", value=st.session_state.get("f_city", p.city), key="f_city")
+            p.city = st.text_input("City / Area:", value=st.session_state.get("f_city", p.city), key="f_city")
+            p.location = st.text_input("Full Location:", value=st.session_state.get("f_location", p.location), key="f_location")
         with col_c2:
             p.linkedin_url = st.text_input("LinkedIn Profile URL:", value=st.session_state.get("f_linkedin", p.linkedin_url), key="f_linkedin")
             p.github_url = st.text_input("GitHub URL:", value=st.session_state.get("f_github", p.github_url), key="f_github")
             p.portfolio_url = st.text_input("Portfolio / Website URL:", value=st.session_state.get("f_portfolio", p.portfolio_url), key="f_portfolio")
-            p.work_authorization = st.text_input("Work Authorization:", value=p.work_authorization, key="f_work_auth")
-            p.expected_salary = st.text_input("Expected Salary:", value=p.expected_salary, key="f_salary")
+            p.work_authorization = st.text_input("Work Authorization:", value=st.session_state.get("f_work_auth", p.work_authorization), key="f_work_auth")
+            p.expected_salary = st.text_input("Expected Salary:", value=st.session_state.get("f_salary", p.expected_salary), key="f_salary")
+            p.years_of_experience = st.text_input("Years of Experience:", value=st.session_state.get("f_years_exp", getattr(p, "years_of_experience", "")), key="f_years_exp")
 
         st.markdown("#### Resume / Profile Sections")
         p.headline = st.text_input("Headline (Max 220 chars):", value=st.session_state.get("f_headline", p.headline), key="f_headline")
         skills_str = st.text_input("Skills (comma-separated):", value=st.session_state.get("f_skills", ", ".join(p.skills)), key="f_skills")
         p.skills = [s.strip() for s in skills_str.split(",") if s.strip()]
+        certs_str = st.text_input("Certifications (comma-separated):", value=st.session_state.get("f_certifications", ", ".join(getattr(p, "certifications", []))), key="f_certifications")
+        p.certifications = [c.strip() for c in certs_str.split(",") if c.strip()]
         p.about = st.text_area("About / Summary:", value=st.session_state.get("f_about", p.about), key="f_about", height=120)
         p.experience = st.text_area("Experience (Bullet points):", value=st.session_state.get("f_experience", p.experience), key="f_experience", height=140)
+        p.education = st.text_area("Education:", value=st.session_state.get("f_education", p.education), key="f_education", height=80)
+
+        # Synchronize derived properties
+        if p.full_name:
+            p.first_name = p.full_name.split()[0]
+            p.last_name = " ".join(p.full_name.split()[1:]) if len(p.full_name.split()) > 1 else ""
+        p.current_location = p.location or f"{p.city}, {p.country}".strip(", ")
+
+        if st.button("💾 Save Profile Changes", type="primary"):
+            sync_applicant_to_widgets(p)
+            st.toast("Profile changes saved and synchronized across all tools!", icon="✅")
 
     with tab_audit:
         h_audit = score_headline(p.headline)

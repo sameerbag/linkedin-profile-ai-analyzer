@@ -74,6 +74,7 @@ class ApplicantProfile:
     experience: str = ""
     skills: List[str] = field(default_factory=list)
     education: str = ""
+    certifications: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
