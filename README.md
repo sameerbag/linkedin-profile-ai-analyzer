@@ -1,122 +1,118 @@
-# 💼 LinkedIn Profile AI Analyzer & Optimizer
+# 🚀 AI Job Search, Matcher & Consent-Based Auto-Apply Assistant
 
-An intelligent, full-stack AI application designed to audit, optimize, and elevate LinkedIn profiles like a top-tier executive recruiter.
+An end-to-end, open-source AI job discovery and application platform inspired by [`ai-job-search`](https://github.com/ai-job-search-dev/ai-job-search).
 
-Built with **Python**, **Streamlit**, **Plotly**, and a hybrid **Dual-Engine Architecture** (combining custom NLP heuristics with **Google Gemini AI**).
+It audits your LinkedIn profile, aggregates live job postings from major portals (**LinkedIn, Indeed, Glassdoor, ZipRecruiter, Google Jobs, RemoteOK**), ranks positions by **AI Fit Score**, and with **explicit user consent**, automatically fills and applies your candidate details and tailored cover letter in one click!
+
+Built with **Python**, **Streamlit**, **JobSpy**, **Playwright**, and a **Dual AI Engine** (custom NLP heuristics + **Google Gemini AI**).
 
 ---
 
-## 🌟 Key Features
+## 🌟 Key Capabilities
 
-### 1. 📊 Holistic Profile Scoring (0–100) & Radar Chart
-- **Overall Score**: Weighted evaluation across all critical profile components.
-- **Headline Hook (20%)**: Character count optimization, divider structure, value proposition, and search keyword density.
-- **About / Summary Narrative (25%)**: Scans for first 3-line hook (before "see more"), quantifiable metrics, storytelling quality, and Call-to-Action (CTA).
-- **Experience & Google XYZ Adherence (35%)**: Measures action-verb diversity, KPI density ($, %, scale), and flags passive buzzwords ("responsible for", "helped with").
-- **ATS & Recruiter Search Fit (20%)**: Compares skills against real-world recruiter search benchmarks.
-- **Interactive Plotly Radar Chart**: Multi-axis visualization showing strengths and blind spots at a glance.
+### 1. 🔍 Multi-Portal Job Scraping & Aggregation
+- **Cross-Portal Discovery**: Concurrently searches across:
+  - **LinkedIn**
+  - **Indeed**
+  - **Glassdoor**
+  - **ZipRecruiter**
+  - **Google Jobs**
+  - **RemoteOK**
+- **Deep Geographic & Country Filtering**:
+  - Filter by Country (**USA, India, United Kingdom, Canada, Germany, Australia, Global/Remote**).
+  - Filter by City / State / Area (e.g. *San Francisco, CA*, *Bengaluru*, *London*, *Toronto*, *Berlin*).
+  - Filter by Work Mode: **Remote Only**, **Hybrid**, or **On-site**.
+  - Filter by Freshness: Past 24 hours, past 3 days, past 7 days, past 30 days.
 
-### 2. ⏱️ Recruiter 10-Second Scan Simulation
-Simulates the brutal reality of how recruiters review profiles:
-- **0–3 Seconds**: Headline, role title, and immediate keyword positioning.
-- **3–6 Seconds**: About section opening hook and narrative clarity.
-- **6–10 Seconds**: Quick scan for quantifiable metrics, numbers, and impact verbs in work experience.
+### 2. 🎯 AI Fit Scorer & Best-Fit Suggestions
+- Analyzes each discovered job description against your candidate profile (skills, title, experience).
+- Computes:
+  - **Fit Score (0–100%)**
+  - **Match Tier**: 🔥 Top Fit (82%+), ✨ Strong Match (68–81%), ⚖️ Moderate (50–67%), ⚠️ Low (<50%).
+  - **Matching Skills Breakdown** (Green pills) vs **Missing Skill Gaps** (Orange pills).
+  - **Recruiter Verdict**: Actionable AI summary explaining why the role fits your background and what to emphasize.
+  - Automatically sorts search results so the **Best Fit** jobs are surfaced first!
 
-### 3. 🎯 Target Role & Keyword Gap Analysis
-- Benchmarks against high-demand industry roles:
-  - **AI & Machine Learning Engineer**
-  - **Full-Stack Software Engineer**
-  - **Data Scientist**
-  - **Product Manager**
-  - **DevOps & Cloud Engineer**
-  - **Custom / General Tech**
-- Identifies **Matching Skills (Green)** vs. **Missing High-Value Keywords (Orange)**.
-- Recommends tailored power verbs for your target domain.
+### 3. 🔒 Human-in-the-Loop Consent Gate
+- Complete privacy & safety: No application is ever submitted without your explicit knowledge.
+- Clear consent verification checkbox before auto-fill tools are unlocked.
 
-### 4. ✍️ 5 High-Converting AI Headline Variants
-Generates 5 distinct headline styles (under LinkedIn's 220-character limit):
-1. **The Recruiter Magnet**: Keyword-dense and search-optimized.
-2. **The Metrics & Impact Driven**: Anchored in quantifiable results.
-3. **The Value Proposition**: "Who you help + How you help them".
-4. **The Storyteller / Thought Leader**: Focus on vision, craft, and mission.
-5. **The Minimalist Authority**: High-status, concise executive positioning.
+### 4. ⚡ Multi-Engine Auto-Fill & Auto-Apply
+- **🌐 1-Click Universal Browser Auto-Fill Bookmarklet**:
+  - Drag the bookmarklet to your browser bar.
+  - Open ANY job application page (**Greenhouse, Lever, LinkedIn Easy Apply, Workday, Indeed, Ashby, BambooHR, Taleo**).
+  - Click the bookmarklet to auto-fill First Name, Last Name, Email, Phone, LinkedIn, GitHub, Location, and Cover Letter in under 1 second!
+- **🤖 Automated Browser Mode (Playwright)**:
+  - Launches an automated browser window, navigates to the job portal, and injects your profile into form fields so you can inspect and submit.
+- **📋 1-Click Quick-Fill Field Matrix**:
+  - Individual 1-click copy inputs for all common application questions.
 
-### 5. 📝 AI About Section Rewriter
-Generates 3 full rewritten versions:
-1. **Conversational & First-Person**: Relatable, engaging, and personal.
-2. **Executive & Metric-Led**: Polished, structured, bulleted, and KPI-heavy.
-3. **Story-Driven Narrative**: Hero's journey highlighting pivotal challenges and future vision.
+### 5. ✍️ AI-Tailored Application Kit
+- **Tailored Cover Letter**: Generates a 3-paragraph tailored cover letter referencing the company's name, role title, and matching technical achievements.
+- **Form Q&A Answers**: Pre-drafts responses for standard application questions (*"Why do you want to work here?"*, *"Summary of relevant experience"*, Notice period, Work authorization, Expected salary).
 
-### 6. 🚀 Google XYZ Formula Bullet Point Transformer
-Transforms weak or passive bullets into Google's proven accomplishment formula:
-> *"Accomplished [X], as measured by [Y], by doing [Z]"*
-- Converts *"Worked on database speed"* ➡️ *"Refactored PostgreSQL indexing and query execution plans, reducing API p99 latency by 42% for 250K+ active users."*
+### 6. 💼 LinkedIn Profile Audit & Heuristics
+- Upload your LinkedIn profile PDF (`More > Save to PDF`) or enter details manually.
+- 10-Second recruiter scan simulation (`0–3s`, `3–6s`, `6–10s`).
+- 5 AI Headline variants & Google XYZ experience bullet optimizer (`"Accomplished [X] as measured by [Y], by doing [Z]"`).
 
-### 7. 💡 LinkedIn Creator & Thought Leadership Generator
-- Generates 5 scroll-stopping post concepts, opening hooks, and hashtags based on your actual experience to build inbound recruiter attraction.
-
-### 8. 📥 One-Click Audit Report Export
-- Download a structured, comprehensive Markdown audit report with an actionable checklist to review offline or share with mentors.
+### 7. 📋 Application Pipeline & Tracker
+- Tracks every application through the lifecycle: `Shortlisted` ➡️ `Consented` ➡️ `Applied` ➡️ `Interviewing` ➡️ `Offer / Rejected`.
+- Local JSON database (`data/applications.json`), persisted across runs.
+- 1-Click export to JSON.
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-LinkedIn-AI-Optimizer/
+Antigravity/
 │
-├── app.py                      # Interactive Streamlit Web Dashboard
-├── run.bat                     # 1-Click Windows Launcher Script
+├── app.py                      # Streamlit Multi-Page Web Platform
+├── run.bat                     # Windows 1-Click Launcher Script
 ├── requirements.txt            # Python dependencies
 ├── .env.example                # API configuration template
 │
-├── analyzer/
+├── jobs/                       # Job Search, Matcher & Auto-Apply Engine
+│   ├── models.py               # Data models (JobPosting, ApplicantProfile, ApplicationRecord)
+│   ├── job_searcher.py         # Multi-portal scraper (JobSpy + Remote aggregators)
+│   ├── job_matcher.py          # AI Fit Scorer, Skill overlap analyzer & Ranker
+│   ├── application_generator.py# Tailored cover letters & form Q&A generator
+│   ├── auto_apply.py           # Browser bookmarklet & Playwright form auto-fillers
+│   ├── tracker.py              # Application pipeline tracker (data/applications.json)
+│   └── sample_jobs.py          # Curated multi-country benchmark postings
+│
+├── analyzer/                   # LinkedIn Profile Analysis Engine
 │   ├── parser.py               # PDF parser for LinkedIn profile exports
 │   ├── heuristics.py           # NLP rule-based scoring engine & 10s recruiter simulation
 │   ├── role_benchmarks.py      # Industry role skills benchmarks & ATS matcher
-│   └── ai_engine.py            # Dual AI engine (Google Gemini API + Smart Offline Heuristic Fallback)
+│   └── ai_engine.py            # Dual AI engine (Google Gemini API + Heuristic Fallback)
 │
 └── sample_data/
-    └── sample_profile.py       # Pre-loaded profiles for instant 1-click testing
+    └── sample_profile.py       # Pre-loaded profiles for instant testing
 ```
 
 ---
 
 ## ⚡ Quick Start Guide
 
-### 1. Run the App (1-Click)
-On Windows, simply double-click **`run.bat`** or run:
+### 1. Launch the Application
+Simply double-click **`run.bat`** on Windows, or run in your terminal:
 
 ```bash
 streamlit run app.py
 ```
 
-The application will automatically open in your default browser at `http://localhost:8501`.
+The application will open in your browser at `http://localhost:8501`.
 
-### 2. Optional: Enable Live Google Gemini AI
-The app comes with a **built-in intelligent offline NLP engine** that works 100% out of the box without any API keys.
-
-If you want personalized generative AI rewrites powered by Gemini:
-1. Obtain a free Gemini API key from [Google AI Studio](https://aistudio.google.com/).
-2. Create a `.env` file in the project root:
-   ```env
-   GEMINI_API_KEY=your_actual_key_here
-   ```
-   *(Or enter your key directly in the app's sidebar under "AI Settings".)*
+### 2. How to Search & Auto-Apply in 3 Steps:
+1. **Set Up Your Profile**: In **💼 LinkedIn Profile & Applicant Setup**, upload your LinkedIn PDF (or load a demo profile) and fill your contact info.
+2. **Find & Rank Jobs**: In **🔍 Job Search & Best-Fit Matches**, enter your target role, pick your country & city, and click **🚀 Find & Rank Jobs**. The top matches will appear with fit scores and skill gaps.
+3. **Consent & Auto-Apply**: Click **⚡ Apply** on any job. Review the tailored cover letter, check the **Consent Box**, and click the **1-Click Auto-Fill Bookmarklet** or launch Playwright!
 
 ---
 
-## 📄 How to Export Your LinkedIn Profile to PDF
-
-1. Go to your **LinkedIn Profile** in your browser.
-2. Click the **More** button in your profile header (next to "Open to" / "Add profile section").
-3. Click **Save to PDF**.
-4. Upload the downloaded PDF directly into the app's sidebar file uploader!
-
----
-
-## 🛠️ Tech Stack
-- **Frontend / UI**: Streamlit, Plotly Express & Graph Objects
-- **Document Extraction**: PyPDF
-- **NLP & Heuristics**: Custom regex tokenizers, action verb lexicons, metric extractors
-- **AI / LLM**: `google-genai` / Google Gemini 2.5 Flash
+## 🔒 Security & Privacy
+- **Local-First**: All personal data and resumes stay on your local computer.
+- **Zero Involuntary Submissions**: Human-in-the-loop consent gate ensures no form is ever submitted without your explicit confirmation.
+- **Works 100% Offline**: Includes built-in intelligent NLP engines that require zero external API keys.
