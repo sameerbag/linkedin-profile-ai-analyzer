@@ -6,7 +6,6 @@ from pypdf import PdfReader
 def extract_text_from_pdf(pdf_file, max_pages: int = 25) -> str:
     """
     Safely extract raw text from uploaded PDF file.
-    Includes page-limit guard to prevent resource exhaustion from malformed files.
     """
     try:
         reader = PdfReader(pdf_file)
@@ -26,24 +25,22 @@ def detect_country_and_city(location_str: str) -> Tuple[str, str]:
     """
     Detects standardized Country and City from a location string.
     Example: 'Pune Division, Maharashtra, India' -> ('India', 'Pune')
-             'Bengaluru, Karnataka, India' -> ('India', 'Bengaluru')
-             'San Francisco, CA' -> ('USA', 'San Francisco')
     """
     if not location_str:
-        return "India", ""
+        return "", ""
 
     loc_lower = location_str.lower()
+    country = ""
 
-    # Detect country
-    country = "India"  # default
     if any(k in loc_lower for k in [
-        "india", "karnataka", "maharashtra", "delhi", "tamil nadu", "telangana", "gujarat", "punjab", "haryana",
-        "bengaluru", "bangalore", "mumbai", "pune", "hyderabad", "chennai", "noida", "gurgaon", "gurugram", "nasik", "nagpur"
+        "india", "karnataka", "maharashtra", "delhi", "tamil nadu", "telangana", "gujarat", "punjab",
+        "haryana", "bengaluru", "bangalore", "mumbai", "pune", "hyderabad", "chennai", "noida",
+        "gurgaon", "gurugram", "nasik", "nagpur", "kolkata", "ahmedabad", "jaipur", "chandigarh"
     ]):
         country = "India"
     elif any(k in loc_lower for k in [
         "united states", "usa", "u.s.a", "san francisco", "new york", "seattle", "austin",
-        "california", "texas", "washington", "boston", "chicago", "los angeles", "colorado"
+        "california", "texas", "washington", "boston", "chicago", "los angeles", "colorado", "new jersey"
     ]):
         country = "USA"
     elif any(k in loc_lower for k in [
@@ -69,7 +66,7 @@ def detect_country_and_city(location_str: str) -> Tuple[str, str]:
     elif "netherlands" in loc_lower or "amsterdam" in loc_lower:
         country = "Netherlands"
 
-    # Detect City: Take first token before comma, Division, District, or State
+    # Extract City: first part before comma, removing noise words
     parts = [p.strip() for p in location_str.split(",") if p.strip()]
     city = parts[0] if parts else location_str
     city = re.sub(r"\b(Greater|Area|Bay|City of|Division|District)\b", "", city, flags=re.IGNORECASE).strip()
@@ -79,259 +76,299 @@ def detect_country_and_city(location_str: str) -> Tuple[str, str]:
 
 def parse_linkedin_text(raw_text: str) -> Dict[str, Any]:
     """
-    Parse LinkedIn profile PDF export text into structured candidate fields:
-    Name, Headline, Location, Country, City, Contact (Email, Phone, LinkedIn URL),
-    Summary/About, Experience, Skills, Certifications, and Education.
+    Parse LinkedIn profile PDF export text into structured candidate fields.
+
+    LinkedIn PDF layout (pypdf linear extraction):
+    -----------------------------------------------
+    Page 1 starts with the LEFT sidebar content first:
+      Contact
+      [address block]
+      [phone] (Mobile)
+      [email]
+      www.linkedin.com/in/[slug] (LinkedIn)
+      [blog] (Blog)
+      Top Skills
+      [skill1]
+      [skill2]
+      [skill3]
+      Certifications
+      [cert1]
+      [cert2]
+    Then the MAIN COLUMN header block:
+      [Candidate Full Name]
+      [Headline - may wrap across multiple lines]
+      [City, State/Division, Country]
+    Then section markers:
+      Summary
+      [summary text...]
+      Experience
+      [experience entries...]
+      Education
+      [education entries...]
     """
-    # Clean special artifacts, non-breaking spaces, HTML entities, and control characters
+    # Step 1: Clean text
     cleaned = raw_text.replace("\xa0", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
     cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", cleaned)
-    
+
     lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
     if not lines:
-        return {
-            "name": "",
-            "headline": "",
-            "location": "",
-            "country": "",
-            "city": "",
-            "email": "",
-            "phone": "",
-            "linkedin_url": "",
-            "about": "",
-            "experience": "",
-            "skills": [],
-            "education": "",
-            "raw_text": raw_text
-        }
+        return _empty_result(raw_text)
 
-    # 1. Extract Email Address
+    # ─── STEP 2: Contact Info (regex over full text) ───────────────────────────
+
     email_match = re.search(r"[\w\.-]+@[\w\.-]+\.[a-zA-Z]{2,}", cleaned)
     email = email_match.group(0).strip() if email_match else ""
 
-    # 2. Extract Phone Number (handles LinkedIn formats like '09226410033 (Mobile)' or '+91 92264 10033')
     phone = ""
     for line in lines:
-        m = re.search(r"(\+?\d[\d\s-]{8,14}\d)", line)
-        if m and any(kw in line.lower() for kw in ["(mobile)", "(phone)", "mobile", "phone"]):
-            phone = m.group(1).strip()
-            break
+        # "(Mobile)" or "(Phone)" tagged lines are guaranteed phone lines
+        m = re.search(r"(\+?[\d\s\-\.]{7,})", line)
+        if m and any(tag in line.lower() for tag in ["(mobile)", "(phone)", "(work)", "(home)"]):
+            candidate = re.sub(r"[^\d+]", "", m.group(0))
+            if 8 <= len(candidate) <= 15:
+                phone = m.group(0).strip()
+                break
     if not phone:
+        # Fallback: find a standalone 10-digit number not in a postal-code context
         for line in lines:
-            m = re.search(r"(\+?\d{1,4}[-.\s]?)?(\d{10,12})", line)
+            m = re.search(r"(?<!\d)(\+?91[-\s]?)?(0?[6-9]\d{9})(?!\d)", line)
             if m:
-                digits = re.sub(r"\D", "", m.group(0))
-                # Validate length and ensure it's not a postal code
-                if 10 <= len(digits) <= 13 and not digits.startswith("411") and not digits.startswith("560"):
-                    phone = m.group(0).strip()
-                    break
+                phone = m.group(0).strip()
+                break
 
-    # 3. Extract LinkedIn URL (handles narrow column line breaks: www.linkedin.com/in/\nsameerbagade)
+    # LinkedIn URL - may be split across two lines: "www.linkedin.com/in/" + slug
+    # The slug line may have " (LinkedIn)" appended (e.g. "sameerbagade (LinkedIn)")
     linkedin_url = ""
     linkedin_slug = ""
     for i, line in enumerate(lines):
         if "linkedin.com/in" in line.lower():
             combined = line
-            if i + 1 < len(lines) and not any(kw in lines[i+1].lower() for kw in ["contact", "top skills", "certifications", "http"]):
-                combined += lines[i+1]
-            m = re.search(r"(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/([a-zA-Z0-9_-]+)", combined)
+            # Check next line for slug continuation — but only if it doesn't look like a section
+            if i + 1 < len(lines):
+                next_line = lines[i + 1]
+                if not any(kw in next_line.lower() for kw in ["contact", "top skills", "certifications", "summary", "experience", "education", "http", "@"]):
+                    combined = line + " " + next_line
+            # Strip common LinkedIn PDF suffixes like "(LinkedIn)", "(Blog)", etc.
+            combined_clean = re.sub(r"\s*\([^)]*\)\s*$", "", combined).strip()
+            # Collapse space between "linkedin.com/in/" and the slug (PDF may insert a space)
+            combined_clean = re.sub(r"(linkedin\.com/in/)\s+", r"\1", combined_clean)
+            m = re.search(r"linkedin\.com/in/([a-zA-Z0-9_-]+)", combined_clean)
             if m:
                 linkedin_slug = m.group(1)
                 linkedin_url = f"https://www.linkedin.com/in/{linkedin_slug}"
                 break
 
-    # 4. Extract Top Skills & Certifications from sidebar
-    skills = []
-    certifications = []
-    in_top_skills = False
-    in_certifications = False
+    # ─── STEP 3: Identify all section boundary indices ─────────────────────────
+    SECTION_HEADERS = {
+        "contact": re.compile(r"^contact$", re.IGNORECASE),
+        "top_skills": re.compile(r"^top skills$", re.IGNORECASE),
+        "languages": re.compile(r"^languages$", re.IGNORECASE),
+        "certifications": re.compile(r"^certifications$", re.IGNORECASE),
+        "summary": re.compile(r"^(summary|about|about me|profile summary)$", re.IGNORECASE),
+        "experience": re.compile(r"^(experience|work experience|professional experience|employment)$", re.IGNORECASE),
+        "education": re.compile(r"^(education|academic background)$", re.IGNORECASE),
+        "publications": re.compile(r"^(publications|projects|honors|awards|volunteer)$", re.IGNORECASE),
+    }
 
-    for line in lines:
-        low = line.lower()
-        if low in ["top skills", "skills", "core skills"]:
-            in_top_skills = True
-            in_certifications = False
-            continue
-        elif low in ["certifications", "licenses & certifications"]:
-            in_certifications = True
-            in_top_skills = False
-            continue
-        elif in_top_skills and (low in ["certifications", "languages", "summary", "experience", "education", "contact"]):
-            in_top_skills = False
-        elif in_certifications and (low in ["languages", "summary", "experience", "education", "contact"]):
-            in_certifications = False
-
-        if in_top_skills:
-            if not any(h in low for h in ["(professional", "(native", "(elementary", "(bilingual"]) and len(line) < 50:
-                skills.append(line.strip())
-        elif in_certifications:
-            if len(line) < 70 and not any(h in low for h in ["page ", "contact", "summary", "experience"]):
-                certifications.append(line.strip())
-
-    # 5. Extract Candidate Block (Name, Headline, Location)
-    # In official LinkedIn PDFs, the profile header sits immediately above "Summary" (or "Experience")
-    summary_idx = -1
+    section_boundaries = []  # list of (line_index, section_name)
     for i, line in enumerate(lines):
-        if line.lower() in ["summary", "about", "about me", "profile summary"]:
-            summary_idx = i
-            break
-    if summary_idx == -1:
-        for i, line in enumerate(lines):
-            if line.lower() in ["experience", "work experience"]:
-                summary_idx = i
+        for sec_name, pat in SECTION_HEADERS.items():
+            if pat.match(line):
+                section_boundaries.append((i, sec_name))
                 break
+
+    def get_section_lines(target_sec: str) -> List[str]:
+        """Return lines belonging to a section (between its header and the next section header)."""
+        start_idx = None
+        end_idx = len(lines)
+        for j, (idx, sec) in enumerate(section_boundaries):
+            if sec == target_sec:
+                start_idx = idx + 1
+                if j + 1 < len(section_boundaries):
+                    end_idx = section_boundaries[j + 1][0]
+                break
+        if start_idx is None:
+            return []
+        return [l for l in lines[start_idx:end_idx] if l.strip()]
+
+    # ─── STEP 4: Skills from "Top Skills" section ──────────────────────────────
+    raw_skills = get_section_lines("top_skills")
+    skills = []
+    for s in raw_skills:
+        low = s.lower()
+        # Skip language proficiency lines
+        if any(h in low for h in ["(professional", "(native", "(elementary", "(bilingual", "(limited"]):
+            continue
+        if len(s) < 60:
+            skills.append(s.strip())
+
+    # ─── STEP 5: Certifications ────────────────────────────────────────────────
+    cert_lines_raw = get_section_lines("certifications")
+    certifications = []
+    for s in cert_lines_raw:
+        low = s.lower()
+        if re.match(r"^page \d+ of \d+$", s, re.IGNORECASE):
+            continue
+        # Stop when we hit a 2-4 Title Case word line that looks like a person's name
+        # (this is where the sidebar ends and the main column candidate block begins)
+        words = s.split()
+        if (2 <= len(words) <= 4
+                and all(w[0].isupper() for w in words if w.isalpha() and len(w) > 1)
+                and not any(cw in low for cw in ["certified", "practitioner", "aws", "exam",
+                                                  "prep", "essentials", "google", "associate",
+                                                  "professional", "foundation", "architect",
+                                                  "developer", "analyst", "specialist", "generative"])
+                and not re.search(r"[\d@/|]", s)):
+            break
+        if len(s) < 80:
+            certifications.append(s.strip())
+
+    # ─── STEP 6: Candidate Header Block — scan backward from Summary boundary ──
+    # Strategy: Look at lines BEFORE the Summary/Experience section header.
+    # The candidate name, headline, and location are the last few lines before Summary.
+    # We identify the name line by matching it to the LinkedIn slug or Title Case heuristics,
+    # making sure not to confuse it with certifications or skills.
+    summary_boundary = next(((idx, sec) for idx, sec in section_boundaries if sec == "summary"), None)
+    experience_boundary = next(((idx, sec) for idx, sec in section_boundaries if sec == "experience"), None)
+    anchor = summary_boundary or experience_boundary
 
     name = ""
     headline = ""
     location = ""
 
-    if summary_idx != -1:
-        # Header lines occur prior to summary
-        header_lines = lines[:summary_idx]
-        
-        # Last line of header block is the Location
-        if header_lines:
-            cand_loc = header_lines[-1].strip()
-            if any(w in cand_loc.lower() for w in [
-                "india", "division", "district", "states", "usa", "area", "bengaluru",
-                "pune", "mumbai", "london", "canada", "york", "francisco", "germany", "australia"
-            ]) or "," in cand_loc:
-                location = cand_loc
-                header_lines = header_lines[:-1]
+    CERT_WORDS = {"certified", "practitioner", "aws", "exam", "prep", "essentials",
+                  "google", "associate", "professional", "foundation", "architect",
+                  "developer", "analyst", "specialist", "generative"}
+    SIDEBAR_HEADERS = {"contact", "top skills", "certifications", "languages", "honors", "awards"}
 
-        # Scan for Candidate Name in header_lines (above headline lines)
-        cert_skip_words = [
-            "certified", "practitioner", "aws", "exam", "prep", "essentials",
-            "google", "associate", "professional", "foundation", "architect", "developer"
-        ]
-        
-        name_idx = -1
-        # Scan backward from end of remaining header_lines
-        for k in range(len(header_lines) - 1, max(-1, len(header_lines) - 8), -1):
-            cand = header_lines[k].strip()
-            low_cand = cand.lower()
-            words = cand.split()
-            
-            # Check if text matches LinkedIn URL slug
-            if linkedin_slug and re.sub(r"[-\s_]+", "", low_cand) == linkedin_slug.lower():
-                name_idx = k
-                break
-                
-            # Or if it's 2-4 capitalized name words, not a certification or header
-            if 2 <= len(words) <= 4 and all(w[0].isupper() for w in words if w.isalpha()):
-                if not any(sw in low_cand for sw in cert_skip_words):
-                    if not any(sw in low_cand for sw in ["top skills", "certifications", "contact", "languages"]):
-                        name_idx = k
-                        break
+    if anchor is not None:
+        anchor_idx = anchor[0]
+        # Scan backward from anchor to find Name, Headline, Location
+        # Location: The line immediately before Summary is the candidate location
+        # Name: A 2-4 Title Case word line, matched by slug or heuristics
+        # Headline: Lines between Name and Location
 
-        if name_idx != -1:
-            name = header_lines[name_idx].strip()
-            # Everything between name_idx+1 and the end of header_lines forms the headline
-            headline_parts = [l.strip() for l in header_lines[name_idx + 1:] if l.strip()]
+        # Collect candidate block — all lines from after top_skills/certs up to anchor
+        # But we don't know exactly where sidebar ends, so we scan all lines before anchor
+        pre_anchor = [l for l in lines[:anchor_idx] if not re.match(r"^page \d+ of \d+$", l, re.IGNORECASE)]
+
+        # Find Location: last line before anchor that looks like a geographic location
+        location_idx_in_pre = -1
+        for k in range(len(pre_anchor) - 1, -1, -1):
+            cand_loc = pre_anchor[k].strip()
+            if (
+                any(w in cand_loc.lower() for w in [
+                    "india", "division", "district", "states", "usa", "area",
+                    "bengaluru", "bangalore", "pune", "mumbai", "london", "canada",
+                    "york", "francisco", "germany", "australia", "singapore",
+                    "kolkata", "hyderabad", "chennai", "delhi", "noida", "maharashtra",
+                    "karnataka", "gujarat", "telangana", "punjab", "haryana"
+                ]) or ("," in cand_loc and len(cand_loc) < 80 and not any(sw in cand_loc.lower() for sw in CERT_WORDS))
+            ):
+                # Make sure it's not a street address (has digit) — allow postal area matches if no digit
+                if not re.search(r"\d{4,}", cand_loc):
+                    location = cand_loc
+                    location_idx_in_pre = k
+                    break
+
+        # Search backward from location for Name (2-4 Title Case words matching slug or heuristic)
+        search_end = location_idx_in_pre if location_idx_in_pre != -1 else len(pre_anchor)
+        name_idx_in_pre = -1
+        for k in range(search_end - 1, max(-1, search_end - 15), -1):
+            cand_line = pre_anchor[k].strip()
+            low_cand = cand_line.lower()
+            words = cand_line.split()
+
+            # Skip sidebar section headers and known noise
+            if low_cand in SIDEBAR_HEADERS:
+                continue
+            # Skip lines with cert keywords
+            if any(cw in low_cand for cw in CERT_WORDS):
+                continue
+            # Skip skill lines
+            if any(low_cand == s.lower() for s in skills):
+                continue
+            # Skip lines that are too long to be a name
+            if len(cand_line) > 60:
+                continue
+
+            # Slug-based match (most reliable)
+            if linkedin_slug:
+                slug_clean = re.sub(r"[-\s_0-9]+", "", linkedin_slug.lower())
+                line_clean = re.sub(r"[^a-z]", "", low_cand)
+                if line_clean == slug_clean and 2 <= len(words) <= 4:
+                    name_idx_in_pre = k
+                    break
+
+            # Title Case heuristic: 2-4 capitalized words, no cert/tech terms
+            if 2 <= len(words) <= 4:
+                if all(w[0].isupper() for w in words if w.isalpha() and len(w) > 1):
+                    if not any(cw in low_cand for cw in CERT_WORDS):
+                        if not re.search(r"[\d@/]", cand_line):
+                            name_idx_in_pre = k
+                            break
+
+        if name_idx_in_pre != -1:
+            name = pre_anchor[name_idx_in_pre].strip()
+            # Headline = lines between name and location
+            hl_start = name_idx_in_pre + 1
+            hl_end = location_idx_in_pre if location_idx_in_pre != -1 else search_end
+            headline_parts = [l.strip() for l in pre_anchor[hl_start:hl_end] if l.strip()]
             headline = " ".join(headline_parts)
             headline = re.sub(r"\s+", " ", headline).strip()
 
-    # Fallback for simple pasted profiles where Name is Line 0
-    if not name and lines:
-        for idx, line in enumerate(lines[:6]):
-            low = line.strip().lower()
-            if low not in ["contact", "top skills", "languages", "certifications"] and "@" not in line and "linkedin" not in low:
-                name = line.strip()
-                if idx + 1 < len(lines):
-                    headline = lines[idx + 1].strip()
-                if idx + 2 < len(lines):
-                    location = lines[idx + 2].strip()
-                break
-
-    country, city = detect_country_and_city(location)
-
-    # 6. Extract Summary, Experience, Education sections
-    about_lines = []
-    experience_lines = []
-    education_lines = []
-    current_sec = None
-
-    for line in lines:
-        low = line.lower()
-        if low in ["summary", "about", "about me", "profile summary"]:
-            current_sec = "about"
-            continue
-        elif low in ["experience", "work experience", "employment history", "professional experience"]:
-            current_sec = "experience"
-            continue
-        elif low in ["education", "academic history"]:
-            current_sec = "education"
-            continue
-        elif low in ["certifications", "licenses & certifications", "languages", "publications", "honors-awards"]:
-            current_sec = "other"
-            continue
-        elif re.match(r"^Page \d+ of \d+$", line, re.IGNORECASE):
-            continue
-
-        if current_sec == "about":
-            about_lines.append(line)
-        elif current_sec == "experience":
-            experience_lines.append(line)
-        elif current_sec == "education":
-            education_lines.append(line)
-
-    # Add core skills mentioned in headline if missing
-    if headline:
-        for term in ["AI", "Machine Learning", "Python", "Solution Architecture", "Cloud", "PyTorch", "LLM", "Docker", "Kubernetes", "FastAPI", "React"]:
-            if term.lower() in headline.lower() and term.lower() not in [s.lower() for s in skills]:
-                skills.append(term)
-
-    # Clean up duplicate skills
-    unique_skills = []
-    for s in skills:
-        cleaned_s = s.strip()
-        if cleaned_s and cleaned_s.lower() not in [u.lower() for u in unique_skills] and len(cleaned_s) < 50:
-            unique_skills.append(cleaned_s)
-
-    # 7. Strict Guardrails: Name and City must NEVER be a skill or tech keyword
-    KNOWN_TECH_TERMS = {
-        "cascading style sheets (css)", "css", "html", "solution architecture", 
-        "ai", "machine learning", "python", "java", "docker", "kubernetes", 
-        "top skills", "skills", "cloud", "aws", "react", "c++", "c#", "angular",
-        "javascript", "typescript", "devops", "sql", "nosql", "git", "linux"
-    }
-
-    if name:
-        low_name = name.lower().strip()
-        if low_name in KNOWN_TECH_TERMS or any(low_name == s.lower().strip() for s in unique_skills):
-            name = ""
-
-    # If name is still empty, search for candidate name from LinkedIn slug or email
+    # ─── STEP 7: Fallback Name lookup via slug/email ───────────────────────────
     if not name and (linkedin_slug or email):
-        target_token = linkedin_slug or email.split("@")[0]
-        target_clean = re.sub(r"[0-9\._-]+", "", target_token).lower()
+        token = linkedin_slug if linkedin_slug else email.split("@")[0]
+        token_clean = re.sub(r"[0-9.\-_]+", "", token).lower()
         for l in lines:
-            l_clean = re.sub(r"[^a-zA-Z]+", "", l).lower()
-            if l_clean == target_clean and 2 <= len(l.split()) <= 4:
+            l_clean = re.sub(r"[^a-z]", "", l.lower())
+            if l_clean == token_clean and 2 <= len(l.split()) <= 4:
                 name = l.strip()
                 break
 
-    # If name is still empty, check candidate block right before headline
-    if not name and headline:
-        for i, l in enumerate(lines):
-            if headline in l or l in headline:
-                if i > 0:
-                    prev_l = lines[i-1].strip()
-                    if 2 <= len(prev_l.split()) <= 4 and prev_l.lower() not in KNOWN_TECH_TERMS:
-                        name = prev_l
-                        break
+    # ─── STEP 8: Summary, Experience, Education ────────────────────────────────
+    about_lines = get_section_lines("summary")
+    experience_lines = get_section_lines("experience")
+    education_lines = get_section_lines("education")
 
-    # Guardrail: City must never be a skill or tech keyword
-    if city:
-        low_city = city.lower().strip()
-        if low_city in KNOWN_TECH_TERMS or any(low_city == s.lower().strip() for s in unique_skills):
-            city = ""
+    # Remove page markers from experience (appears mid-text in LinkedIn PDFs)
+    experience_lines = [l for l in experience_lines if not re.match(r"^page \d+ of \d+$", l, re.IGNORECASE)]
 
+    country, city = detect_country_and_city(location)
+
+    # ─── STEP 9: Add skills from headline (if not already present) ─────────────
+    if headline:
+        for term in ["AI", "Machine Learning", "Python", "Cloud", "PyTorch", "LLM", "Docker",
+                     "Kubernetes", "FastAPI", "React", "Solution Architecture"]:
+            if term.lower() in headline.lower() and term.lower() not in [s.lower() for s in skills]:
+                skills.append(term)
+
+    # ─── STEP 10: Guardrails ───────────────────────────────────────────────────
+    TECH_TERMS = {
+        "cascading style sheets (css)", "css", "html", "solution architecture",
+        "ai", "machine learning", "python", "java", "docker", "kubernetes",
+        "top skills", "skills", "cloud", "aws", "react", "c++", "c#",
+        "angular", "javascript", "typescript", "devops", "sql", "nosql", "git", "linux"
+    }
+    if name and name.lower().strip() in TECH_TERMS:
+        name = ""
+    if city and city.lower().strip() in TECH_TERMS:
+        city = ""
     if not city:
-        for known_city in ["Pune", "Bengaluru", "Bangalore", "Mumbai", "Hyderabad", "Chennai", "Delhi", "Noida", "Gurgaon", "Gurugram", "San Francisco", "New York", "London", "Toronto", "Nasik"]:
-            if re.search(r"\b" + re.escape(known_city) + r"\b", raw_text, re.IGNORECASE):
+        for known_city in ["Pune", "Bengaluru", "Bangalore", "Mumbai", "Hyderabad", "Chennai",
+                           "Delhi", "Noida", "Gurgaon", "Gurugram", "San Francisco", "New York",
+                           "London", "Toronto", "Nasik", "Nagpur", "Kolkata", "Ahmedabad"]:
+            if re.search(r"\b" + re.escape(known_city) + r"\b", cleaned, re.IGNORECASE):
                 city = known_city
                 break
+
+    # Deduplicate skills
+    unique_skills = []
+    for s in skills:
+        cs = s.strip()
+        if cs and cs.lower() not in [u.lower() for u in unique_skills] and len(cs) < 60:
+            unique_skills.append(cs)
 
     return {
         "name": name,
@@ -348,4 +385,12 @@ def parse_linkedin_text(raw_text: str) -> Dict[str, Any]:
         "education": "\n".join(education_lines).strip(),
         "certifications": certifications,
         "raw_text": raw_text
+    }
+
+
+def _empty_result(raw_text: str) -> Dict[str, Any]:
+    return {
+        "name": "", "headline": "", "location": "", "country": "", "city": "",
+        "email": "", "phone": "", "linkedin_url": "", "about": "", "experience": "",
+        "skills": [], "education": "", "certifications": [], "raw_text": raw_text
     }
