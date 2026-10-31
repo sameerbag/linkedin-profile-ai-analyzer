@@ -271,39 +271,26 @@ if app_mode == "🔍 Job Search & Best-Fit Matches":
 
     # Render Ranked Jobs
     for idx, job in enumerate(jobs):
-        with st.container():
+        with st.container(border=True):
             score = job.fit_score
             tier = job.match_tier
-            
             badge_class = "badge-success" if score >= 80 else ("badge-info" if score >= 65 else "badge-warning")
-            portal_color = {"LinkedIn": "#0A66C2", "Indeed": "#2164f3", "Glassdoor": "#0caa41", "Ziprecruiter": "#38a169", "Remoteok": "#ff4742"}.get(job.source, "#4f46e5")
 
-            st.markdown(f"""
-            <div class="job-card">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                    <div>
-                        <span style="font-size: 1.25rem; font-weight: 800; color: #1e293b;">{job.title}</span>
-                        <div style="font-size: 0.95rem; font-weight: 600; color: #475569; margin-top: 2px;">
-                            🏢 {job.company} &nbsp;•&nbsp; 📍 {job.location} &nbsp;•&nbsp; 
-                            <span style="color: {portal_color}; font-weight: 700;">🌐 {job.source}</span>
-                            {f'&nbsp;•&nbsp; 💰 {job.salary}' if job.salary else ''}
-                        </div>
-                    </div>
-                    <div style="text-align: right;">
-                        <span class="badge-pill {badge_class}" style="font-size: 0.95rem;">{tier} ({score}%)</span>
-                    </div>
-                </div>
-                <div style="font-size: 0.88rem; color: #334155; margin-bottom: 10px; background: #f8fafc; padding: 10px; border-radius: 6px;">
-                    💡 <strong>AI Fit Summary:</strong> {job.match_summary}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            c_header_left, c_header_right = st.columns([3.5, 1.2])
+            with c_header_left:
+                st.markdown(f"### {job.title}")
+                sal_part = f" &nbsp;•&nbsp; 💰 **{job.salary}**" if job.salary else ""
+                st.markdown(f"🏢 **{job.company}** &nbsp;•&nbsp; 📍 {job.location} &nbsp;•&nbsp; 🌐 **{job.source}**{sal_part}")
+            with c_header_right:
+                st.markdown(f'<div style="text-align: right;"><span class="badge-pill {badge_class}" style="font-size: 0.95rem;">{tier} ({score}%)</span></div>', unsafe_allow_html=True)
 
-            col_skills, col_actions = st.columns([3, 1.2])
+            st.info(f"💡 **AI Fit Summary:** {job.match_summary}")
+
+            col_skills, col_actions = st.columns([2.8, 1.4])
             with col_skills:
                 matching_pills = " ".join([f'<span class="badge-pill badge-success">✓ {s}</span>' for s in job.matching_skills[:5]])
                 missing_pills = " ".join([f'<span class="badge-pill badge-warning">⚠ {s}</span>' for s in job.missing_skills[:3]])
-                st.markdown(f"**Matching Skills:** {matching_pills if matching_pills else 'None identified'} &nbsp; {missing_pills}", unsafe_allow_html=True)
+                st.markdown(f"**Matching Skills:** {matching_pills if matching_pills else 'Core skills identified'} &nbsp; {missing_pills}", unsafe_allow_html=True)
 
             with col_actions:
                 btn_c1, btn_c2 = st.columns([1, 1])
@@ -331,8 +318,6 @@ if app_mode == "🔍 Job Search & Best-Fit Matches":
 
             with st.expander("📖 View Cleaned Job Description", expanded=False):
                 st.markdown(clean_html_text(job.description))
-
-            st.markdown("---")
 
 
 # ==============================================================================
@@ -403,13 +388,7 @@ elif app_mode == "⚡ Consent & Auto-Apply Center":
     # USER CONSENT GATE
     # ==========================================================================
     st.markdown("### 🔒 Step 1: User Consent Verification")
-    st.markdown("""
-    <div class="consent-box">
-        <strong>⚠️ Security & Consent Requirement:</strong><br>
-        To prevent accidental submissions, this assistant operates with <strong>human-in-the-loop consent</strong>. 
-        You must review and check the consent box below before launching auto-fill actions.
-    </div>
-    """, unsafe_allow_html=True)
+    st.warning("⚠️ **Security & Consent Requirement:** To prevent accidental submissions, this assistant operates with **human-in-the-loop consent**. You must review the tailored application materials and check the consent box below before auto-fill tools are unlocked.")
 
     consent_given = st.checkbox(
         f"✅ I have reviewed the application materials and give my consent to auto-fill my details for '{selected_job.title}' at {selected_job.company}.",
@@ -600,15 +579,11 @@ elif app_mode == "💼 LinkedIn Profile & Applicant Setup":
         scan_items = recruiter_10_second_audit(p.to_dict(), overall["overall_score"])
         for item in scan_items:
             status_badge = "badge-success" if item["status"] == "PASS" else "badge-warning"
-            st.markdown(f"""
-            <div class="recruiter-scan-box">
-                <div style="display: flex; justify-content: space-between;">
-                    <strong>{item["phase"]}</strong>
-                    <span class="badge-pill {status_badge}">{item["status"]}</span>
-                </div>
-                <div style="font-size: 0.88rem; color: #475569; margin-top: 4px;">{item["comment"]}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            with st.container(border=True):
+                c_scan1, c_scan2 = st.columns([3.5, 1])
+                c_scan1.markdown(f"**{item['phase']}**")
+                c_scan2.markdown(f'<div style="text-align: right;"><span class="badge-pill {status_badge}">{item["status"]}</span></div>', unsafe_allow_html=True)
+                st.caption(item["comment"])
 
 
 # ==============================================================================
