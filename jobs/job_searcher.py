@@ -7,6 +7,7 @@ from datetime import datetime
 
 from .models import JobPosting
 from .sample_jobs import SAMPLE_JOBS
+from .utils import clean_html_text, clean_text_field
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +81,8 @@ def search_jobs_multi_portal(
 
             if df is not None and not df.empty:
                 for _, row in df.iterrows():
-                    title = str(row.get("title", "") or "").strip()
-                    company = str(row.get("company", "") or "").strip()
+                    title = clean_text_field(str(row.get("title", "") or ""))
+                    company = clean_text_field(str(row.get("company", "") or ""))
                     if not title or title.lower() == "nan":
                         continue
 
@@ -98,8 +99,12 @@ def search_jobs_multi_portal(
 
                     job_site = str(row.get("site", "Web") or "Web").capitalize()
                     job_url = str(row.get("job_url", "") or "")
-                    desc = str(row.get("description", "") or "")
-                    job_loc = str(row.get("location", "") or search_loc)
+                    raw_desc = str(row.get("description", "") or "")
+                    desc = clean_html_text(raw_desc)
+                    if not desc or desc.lower() == "nan":
+                        desc = f"Job opportunity for {title} at {company}."
+
+                    job_loc = clean_text_field(str(row.get("location", "") or search_loc))
 
                     postings.append(
                         JobPosting(
@@ -112,7 +117,7 @@ def search_jobs_multi_portal(
                             is_remote=bool(row.get("is_remote", is_remote)),
                             job_type=str(row.get("job_type", "Full-time") or "Full-time"),
                             job_url=job_url,
-                            description=desc if desc != "nan" else f"Job opportunity for {title} at {company}.",
+                            description=desc,
                             date_posted=str(row.get("date_posted", "Recently") or "Recently"),
                             source=job_site,
                             salary=sal_str

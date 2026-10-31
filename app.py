@@ -41,6 +41,7 @@ from jobs.tracker import (
     delete_application,
     get_pipeline_stats
 )
+from jobs.utils import clean_html_text, clean_text_field
 
 # Page configuration
 st.set_page_config(
@@ -328,6 +329,9 @@ if app_mode == "🔍 Job Search & Best-Fit Matches":
                         save_application(rec)
                         st.toast(f"Saved {job.title} at {job.company} to Pipeline!", icon="⭐")
 
+            with st.expander("📖 View Cleaned Job Description", expanded=False):
+                st.markdown(clean_html_text(job.description))
+
             st.markdown("---")
 
 
@@ -360,7 +364,8 @@ elif app_mode == "⚡ Consent & Auto-Apply Center":
         st.metric("AI Fit Score", f"{selected_job.fit_score}%", selected_job.match_tier)
 
     with st.expander("📄 Full Job Description & Requirements", expanded=False):
-        st.write(selected_job.description)
+        cleaned_desc = clean_html_text(selected_job.description)
+        st.markdown(cleaned_desc)
         if selected_job.job_url:
             st.markdown(f"🔗 [Direct Posting URL]({selected_job.job_url})")
 
