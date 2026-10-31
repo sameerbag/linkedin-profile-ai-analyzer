@@ -367,50 +367,50 @@ if app_mode == "🔍 Job Search & Best-Fit Matches":
                 with st.container(border=True):
                     score = job.fit_score
                     tier = job.match_tier
-            badge_class = "badge-success" if score >= 80 else ("badge-info" if score >= 65 else "badge-warning")
+                    badge_class = "badge-success" if score >= 80 else ("badge-info" if score >= 65 else "badge-warning")
 
-            c_header_left, c_header_right = st.columns([3.5, 1.2])
-            with c_header_left:
-                st.markdown(f"### {job.title}")
-                sal_part = f" &nbsp;•&nbsp; 💰 **{job.salary}**" if job.salary else ""
-                st.markdown(f"🏢 **{job.company}** &nbsp;•&nbsp; 📍 {job.location} &nbsp;•&nbsp; 🌐 **{job.source}**{sal_part}")
-            with c_header_right:
-                st.markdown(f'<div style="text-align: right;"><span class="badge-pill {badge_class}" style="font-size: 0.95rem;">{tier} ({score}%)</span></div>', unsafe_allow_html=True)
+                    c_header_left, c_header_right = st.columns([3.5, 1.2])
+                    with c_header_left:
+                        st.markdown(f"### {job.title}")
+                        sal_part = f" &nbsp;•&nbsp; 💰 **{job.salary}**" if job.salary else ""
+                        st.markdown(f"🏢 **{job.company}** &nbsp;•&nbsp; 📍 {job.location} &nbsp;•&nbsp; 🌐 **{job.source}**{sal_part}")
+                    with c_header_right:
+                        st.markdown(f'<div style="text-align: right;"><span class="badge-pill {badge_class}" style="font-size: 0.95rem;">{tier} ({score}%)</span></div>', unsafe_allow_html=True)
 
-            st.info(f"💡 **AI Fit Summary:** {job.match_summary}")
+                    st.info(f"💡 **AI Fit Summary:** {job.match_summary}")
 
-            col_skills, col_actions = st.columns([2.8, 1.4])
-            with col_skills:
-                matching_pills = " ".join([f'<span class="badge-pill badge-success">✓ {s}</span>' for s in job.matching_skills[:5]])
-                missing_pills = " ".join([f'<span class="badge-pill badge-warning">⚠ {s}</span>' for s in job.missing_skills[:3]])
-                st.markdown(f"**Matching Skills:** {matching_pills if matching_pills else 'Core skills identified'} &nbsp; {missing_pills}", unsafe_allow_html=True)
+                    col_skills, col_actions = st.columns([2.8, 1.4])
+                    with col_skills:
+                        matching_pills = " ".join([f'<span class="badge-pill badge-success">✓ {s}</span>' for s in job.matching_skills[:5]])
+                        missing_pills = " ".join([f'<span class="badge-pill badge-warning">⚠ {s}</span>' for s in job.missing_skills[:3]])
+                        st.markdown(f"**Matching Skills:** {matching_pills if matching_pills else 'Core skills identified'} &nbsp; {missing_pills}", unsafe_allow_html=True)
 
-            with col_actions:
-                btn_c1, btn_c2 = st.columns([1, 1])
-                with btn_c1:
-                    if st.button("⚡ Apply", key=f"apply_{job.id}_{idx}", type="primary", use_container_width=True):
-                        st.session_state.selected_job = job
-                        st.session_state.tailored_cover_letter = generate_tailored_cover_letter(job, st.session_state.applicant_profile, api_key_input)
-                        st.session_state.user_consent = False
-                        st.query_params["tab"] = "apply"
-                        st.rerun()
-                with btn_c2:
-                    if st.button("⭐ Save", key=f"save_{job.id}_{idx}", use_container_width=True):
-                        rec = ApplicationRecord(
-                            job_id=job.id,
-                            job_title=job.title,
-                            company=job.company,
-                            location=job.location,
-                            job_url=job.job_url,
-                            source=job.source,
-                            fit_score=job.fit_score,
-                            status="Shortlisted"
-                        )
-                        save_application(rec)
-                        st.toast(f"Saved {job.title} at {job.company} to Pipeline!", icon="⭐")
+                    with col_actions:
+                        btn_c1, btn_c2 = st.columns([1, 1])
+                        with btn_c1:
+                            if st.button("⚡ Apply", key=f"apply_{job.id}_{idx}", type="primary", use_container_width=True):
+                                st.session_state.selected_job = job
+                                st.session_state.tailored_cover_letter = generate_tailored_cover_letter(job, st.session_state.applicant_profile, api_key_input)
+                                st.session_state.user_consent = False
+                                st.query_params["tab"] = "apply"
+                                st.rerun()
+                        with btn_c2:
+                            if st.button("⭐ Save", key=f"save_{job.id}_{idx}", use_container_width=True):
+                                rec = ApplicationRecord(
+                                    job_id=job.id,
+                                    job_title=job.title,
+                                    company=job.company,
+                                    location=job.location,
+                                    job_url=job.job_url,
+                                    source=job.source,
+                                    fit_score=job.fit_score,
+                                    status="Shortlisted"
+                                )
+                                save_application(rec)
+                                st.toast(f"Saved {job.title} at {job.company} to Pipeline!", icon="⭐")
 
-            with st.expander("📖 View Cleaned Job Description", expanded=False):
-                st.markdown(clean_html_text(job.description))
+                    with st.expander("📖 View Cleaned Job Description", expanded=False):
+                        st.markdown(clean_html_text(job.description))
 
 
 # ==============================================================================
