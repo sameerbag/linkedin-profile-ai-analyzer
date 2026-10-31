@@ -3,6 +3,60 @@ from .models import JobPosting
 
 SAMPLE_JOBS: List[JobPosting] = [
     JobPosting(
+        id="job-ai-in-001",
+        title="Lead AI & Machine Learning Engineer",
+        company="CognitiveFlow Systems",
+        location="Bengaluru, Karnataka, India (Hybrid / Remote)",
+        country="India",
+        city="Bengaluru",
+        is_remote=True,
+        job_type="Full-time",
+        job_url="https://www.linkedin.com/jobs/view/sample-ai-in-001",
+        source="LinkedIn",
+        salary="₹38,00,000 - ₹55,00,000 / yr",
+        date_posted="1 day ago",
+        description="""CognitiveFlow Systems is looking for a Lead AI / Machine Learning Engineer to spearhead our generative AI and agentic workflow platform.
+
+Responsibilities:
+• Architect enterprise-grade Retrieval-Augmented Generation (RAG) pipelines and vector search indexing.
+• Fine-tune open-weights models (Llama 3, Mistral) using LoRA/QLoRA and quantize models for low-latency inference.
+• Deploy microservices on Kubernetes using Docker, FastAPI, and Triton Inference Server.
+• Optimize model latency, throughput, and GPU utilization across AWS and GCP clusters.
+
+Required Qualifications:
+• 4+ years of software engineering experience with strong proficiency in Python and PyTorch.
+• Hands-on production experience with LLMs, Transformers, RAG, LangChain or LlamaIndex, and Vector Databases (Pinecone, Qdrant, Milvus).
+• Experience deploying machine learning applications using Docker, Kubernetes, and CI/CD pipelines.
+• Strong foundation in system design, distributed systems, and REST API architecture."""
+    ),
+    JobPosting(
+        id="job-fs-in-002",
+        title="Staff Full-Stack Software Engineer",
+        company="CloudScale Technologies",
+        location="Pune, Maharashtra, India (Hybrid / Remote)",
+        country="India",
+        city="Pune",
+        is_remote=True,
+        job_type="Full-time",
+        job_url="https://www.linkedin.com/jobs/view/sample-fs-in-002",
+        source="LinkedIn",
+        salary="₹30,00,000 - ₹45,00,000 / yr",
+        date_posted="2 days ago",
+        description="""CloudScale is seeking a Staff Full-Stack Software Engineer in Pune to spearhead our next-generation enterprise SaaS platform.
+
+Responsibilities:
+• Lead full-lifecycle frontend and backend feature engineering from conceptualization to global production release.
+• Build lightning-fast, reactive user interfaces in React, TypeScript, and Next.js.
+• Engineer resilient, high-concurrency microservices with Python (FastAPI/Django) and Node.js.
+• Design robust relational schemas in PostgreSQL and optimize query performance with Redis caching.
+
+Required Qualifications:
+• 4+ years of full-stack engineering experience.
+• Mastery of React, TypeScript, Modern JavaScript, and state management.
+• Deep expertise with Python (FastAPI/Flask) or Node.js backend services.
+• Experience with cloud deployments on AWS or Azure, Docker containerization, and automated testing."""
+    ),
+    JobPosting(
         id="job-ai-001",
         title="Senior AI / Machine Learning Engineer",
         company="ScaleAI Labs",
@@ -30,45 +84,18 @@ Required Qualifications:
 • Strong foundation in system design, distributed systems, and REST API architecture."""
     ),
     JobPosting(
-        id="job-fs-002",
-        title="Staff Full-Stack Software Engineer",
-        company="CloudScale Technologies",
-        location="Bengaluru, Karnataka, India (Remote / Hybrid)",
+        id="job-ds-in-003",
+        title="Lead Data Scientist & Predictive Modeler",
+        company="FinMetrics India",
+        location="Hyderabad, Telangana, India (Remote)",
         country="India",
-        city="Bengaluru",
+        city="Hyderabad",
         is_remote=True,
         job_type="Full-time",
-        job_url="https://www.linkedin.com/jobs/view/sample-fs-002",
-        source="LinkedIn",
-        salary="₹35,00,000 - ₹50,00,000 / yr",
-        date_posted="1 day ago",
-        description="""CloudScale is seeking a Staff Full-Stack Software Engineer to spearhead our next-generation enterprise SaaS platform.
-
-Responsibilities:
-• Lead full-lifecycle frontend and backend feature engineering from conceptualization to global production release.
-• Build lightning-fast, reactive user interfaces in React, TypeScript, and Next.js.
-• Engineer resilient, high-concurrency microservices with Python (FastAPI/Django) and Node.js.
-• Design robust relational schemas in PostgreSQL and optimize query performance with Redis caching.
-
-Required Qualifications:
-• 5+ years of full-stack engineering experience.
-• Mastery of React, TypeScript, Modern JavaScript, and state management.
-• Deep expertise with Python (FastAPI/Flask) or Node.js backend services.
-• Experience with cloud deployments on AWS or Azure, Docker containerization, and automated testing (Jest, PyTest)."""
-    ),
-    JobPosting(
-        id="job-ds-003",
-        title="Lead Data Scientist & Predictive Modeler",
-        company="FinMetrics Global",
-        location="New York, NY (On-site / Hybrid)",
-        country="USA",
-        city="New York",
-        is_remote=False,
-        job_type="Full-time",
-        job_url="https://www.indeed.com/viewjob?jk=sample-ds-003",
+        job_url="https://www.indeed.com/viewjob?jk=sample-ds-in-003",
         source="Indeed",
-        salary="$150,000 - $190,000 / yr",
-        date_posted="3 days ago",
+        salary="₹32,00,000 - ₹48,00,000 / yr",
+        date_posted="Just now",
         description="""FinMetrics is hiring a Lead Data Scientist to discover actionable insights and build predictive risk scoring models across millions of daily financial transactions.
 
 Responsibilities:
@@ -134,30 +161,5 @@ Required Qualifications:
 • 3+ years of product management experience in B2B SaaS, developer APIs, or AI products.
 • Technical background or strong ability to collaborate deeply with software engineers.
 • Data-driven mindset with experience in A/B testing, user journey mapping, and KPI tracking."""
-    ),
-    JobPosting(
-        id="job-genai-006",
-        title="Generative AI Application Developer",
-        company="Hyperion AI",
-        location="Berlin, Germany (Remote in Europe)",
-        country="Germany",
-        city="Berlin",
-        is_remote=True,
-        job_type="Full-time",
-        job_url="https://remoteok.com/l/sample-genai-006",
-        source="RemoteOK",
-        salary="€80,000 - €105,000 / yr",
-        date_posted="1 day ago",
-        description="""Hyperion AI is building context-aware enterprise co-pilots. We need a Generative AI Developer to integrate LLM foundation models into real-world workflows.
-
-Responsibilities:
-• Implement agentic workflows, multi-agent frameworks (AutoGen, CrewAI, LangGraph), and tools integration.
-• Optimize embeddings, semantic caching, and chunking strategies in Vector DBs.
-• Build secure, authenticated FastAPI backends with robust prompt injection defense.
-
-Required Qualifications:
-• Strong programming skills in Python and TypeScript.
-• Experience with OpenAI, Anthropic, Gemini APIs, or open-source HuggingFace models.
-• Familiarity with Docker, Git, and automated testing."""
     )
 ]

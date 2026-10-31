@@ -149,10 +149,11 @@ if "applicant_profile" not in st.session_state:
         first_name="Sameer",
         last_name="Bag",
         email="sameer@example.com",
-        phone="+1 (555) 019-2831",
-        country="USA",
-        city="San Francisco",
-        state_province="CA",
+        phone="+91 98765 43210",
+        country="India",
+        city="Bengaluru",
+        state_province="Karnataka",
+        current_location="Bengaluru, Karnataka, India",
         linkedin_url="https://github.com/sameerbag",
         github_url="https://github.com/sameerbag",
         portfolio_url="https://github.com/sameerbag",
@@ -162,6 +163,12 @@ if "applicant_profile" not in st.session_state:
         about="AI Engineer specializing in high-scale machine learning systems, LLM fine-tuning, and RAG architectures.",
         experience="Architected enterprise RAG system with PyTorch and LangChain, cutting latency by 45%. Deployed microservices on Kubernetes cluster handling 100K+ daily queries."
     )
+
+if "location_configured" not in st.session_state:
+    st.session_state.location_configured = False
+
+if "target_role_query" not in st.session_state:
+    st.session_state.target_role_query = "AI & Machine Learning Engineer"
 
 if "discovered_jobs" not in st.session_state:
     st.session_state.discovered_jobs = []
@@ -206,7 +213,11 @@ with st.sidebar.expander("🔑 AI Settings (Gemini API)", expanded=False):
         st.caption("⚡ Offline Intelligent NLP Engine Active")
 
 prof = st.session_state.applicant_profile
-st.sidebar.markdown(f"**Current Applicant:**  \n👤 **{prof.full_name or 'Candidate'}**  \n📍 {prof.city or 'Remote'}, {prof.country}")
+st.sidebar.markdown(f"**Current Applicant:**  \n👤 **{prof.full_name or 'Candidate'}**  \n📍 **{prof.city or 'Not set'}**, {prof.country}")
+
+if st.sidebar.button("📍 Change Location / PDF", use_container_width=True):
+    st.session_state.location_configured = False
+    st.rerun()
 
 
 # ==============================================================================
@@ -216,15 +227,78 @@ if app_mode == "🔍 Job Search & Best-Fit Matches":
     st.markdown('<div class="main-title">🔍 Multi-Portal Job Finder & Best-Fit Matcher</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-title">Scrapes and aggregates postings from LinkedIn, Indeed, Glassdoor, ZipRecruiter, and Google Jobs. Analyzes and ranks each role against your profile to find your best fit.</div>', unsafe_allow_html=True)
 
+    # Launch Onboarding / Setup Box if location is not configured or user wants to change it
+    if not st.session_state.get("location_configured", False):
+        with st.container(border=True):
+            st.markdown("### 📍 Step 1: Set Your Job Location & Role")
+            st.markdown("Please confirm your country, city, and target job title (or upload your LinkedIn Profile PDF to auto-detect your location):")
+
+            col_pdf_setup, col_manual_setup = st.columns([1.2, 1.5])
+            with col_pdf_setup:
+                st.markdown("##### 📄 Option A: Auto-Detect from LinkedIn PDF")
+                launch_pdf = st.file_uploader("Upload LinkedIn Profile PDF:", type=["pdf"], key="launch_pdf_uploader")
+                if launch_pdf is not None:
+                    if st.button("🚀 Extract Location & Details from PDF", type="primary", use_container_width=True):
+                        with st.spinner("Parsing LinkedIn profile and detecting location..."):
+                            raw_text = extract_text_from_pdf(launch_pdf)
+                            parsed = parse_linkedin_text(raw_text)
+                            p = st.session_state.applicant_profile
+                            p.full_name = parsed["name"] or p.full_name
+                            p.headline = parsed["headline"] or p.headline
+                            p.location = parsed.get("location", "") or p.location
+                            p.country = parsed.get("country", "") or p.country
+                            p.city = parsed.get("city", "") or p.city
+                            p.current_location = p.location or f"{p.city}, {p.country}".strip(", ")
+                            p.email = parsed.get("email", "") or p.email
+                            p.phone = parsed.get("phone", "") or p.phone
+                            p.linkedin_url = parsed.get("linkedin_url", "") or p.linkedin_url
+                            p.about = parsed["about"] or p.about
+                            p.experience = parsed["experience"] or p.experience
+                            p.skills = parsed["skills"] or p.skills
+                            st.session_state.target_role_query = p.headline.split("|")[0].strip() or "AI & Machine Learning Engineer"
+                            st.session_state.location_configured = True
+                            st.session_state.discovered_jobs = []  # refresh search for new location
+                            st.success(f"✅ Auto-detected {p.full_name} located in {p.city or p.location}, {p.country}!")
+                            st.rerun()
+
+            with col_manual_setup:
+                st.markdown("##### ✏️ Option B: Confirm Manually")
+                c_opt1, c_opt2 = st.columns(2)
+                with c_opt1:
+                    setup_country_list = ["India", "USA", "United Kingdom", "Canada", "Germany", "Australia", "Global / Remote", "All Countries"]
+                    default_c_idx = setup_country_list.index(prof.country) if prof.country in setup_country_list else 0
+                    chosen_setup_country = st.selectbox("Your Country:", setup_country_list, index=default_c_idx, key="setup_country_select")
+                with c_opt2:
+                    chosen_setup_city = st.text_input("City / Area:", value=prof.city or "Bengaluru", placeholder="e.g. Bengaluru, Pune, San Francisco", key="setup_city_input")
+
+                chosen_setup_role = st.text_input("Target Job Title:", value=st.session_state.get("target_role_query", "AI & Machine Learning Engineer"), key="setup_role_input")
+
+                if st.button("💾 Save Location & Search Jobs", type="primary", use_container_width=True):
+                    p = st.session_state.applicant_profile
+                    p.country = chosen_setup_country
+                    p.city = chosen_setup_city
+                    p.current_location = f"{chosen_setup_city}, {chosen_setup_country}".strip(", ")
+                    st.session_state.target_role_query = chosen_setup_role
+                    st.session_state.location_configured = True
+                    st.session_state.discovered_jobs = []
+                    st.rerun()
+
+        st.markdown("---")
+
+    # Search Filters (Dynamic to User's Profile)
     with st.expander("🎯 Search Filters & Country Selection", expanded=True):
         f1, f2, f3, f4 = st.columns([1.5, 1, 1, 1])
         with f1:
-            search_query = st.text_input("Job Title / Keywords:", value="AI & Machine Learning Engineer")
+            default_role = st.session_state.get("target_role_query", prof.headline.split("|")[0].strip() if prof.headline else "AI & Machine Learning Engineer")
+            search_query = st.text_input("Job Title / Keywords:", value=default_role)
         with f2:
-            country_options = ["USA", "India", "United Kingdom", "Canada", "Germany", "Australia", "Global / Remote", "All Countries"]
-            selected_country = st.selectbox("Country:", country_options, index=0)
+            country_options = ["India", "USA", "United Kingdom", "Canada", "Germany", "Australia", "Global / Remote", "All Countries"]
+            active_country = prof.country if prof.country in country_options else "India"
+            country_idx = country_options.index(active_country)
+            selected_country = st.selectbox("Country:", country_options, index=country_idx)
         with f3:
-            location_query = st.text_input("City / Area (Optional):", value="San Francisco, CA")
+            active_city = prof.city or prof.location or "Bengaluru"
+            location_query = st.text_input("City / Area (Optional):", value=active_city)
         with f4:
             work_mode = st.selectbox("Work Type:", ["Remote or Any", "Remote Only", "Hybrid / On-site"], index=0)
 
@@ -524,8 +598,8 @@ elif app_mode == "💼 LinkedIn Profile & Applicant Setup":
         st.caption("💡 *How to export:* Open your LinkedIn profile -> Click **More** -> Click **Save to PDF**.")
         uploaded_pdf = st.file_uploader("Upload LinkedIn PDF Export:", type=["pdf"])
         if uploaded_pdf is not None:
-            if st.button("Parse & Extract PDF"):
-                with st.spinner("Extracting sections from PDF..."):
+            if st.button("Parse & Extract PDF", type="primary"):
+                with st.spinner("Extracting sections from PDF and detecting location..."):
                     raw_text = extract_text_from_pdf(uploaded_pdf)
                     parsed = parse_linkedin_text(raw_text)
                     p = st.session_state.applicant_profile
@@ -534,7 +608,26 @@ elif app_mode == "💼 LinkedIn Profile & Applicant Setup":
                     p.about = parsed["about"] or p.about
                     p.experience = parsed["experience"] or p.experience
                     p.skills = parsed["skills"] or p.skills
-                    st.success("LinkedIn PDF successfully parsed!")
+                    if parsed.get("country"):
+                        p.country = parsed["country"]
+                    if parsed.get("city"):
+                        p.city = parsed["city"]
+                    if parsed.get("location"):
+                        p.location = parsed["location"]
+                        p.current_location = parsed["location"]
+                    if parsed.get("email"):
+                        p.email = parsed["email"]
+                    if parsed.get("phone"):
+                        p.phone = parsed["phone"]
+                    if parsed.get("linkedin_url"):
+                        p.linkedin_url = parsed["linkedin_url"]
+                    st.session_state.location_configured = True
+                    if p.headline:
+                        st.session_state.target_role_query = p.headline.split("|")[0].strip()
+                    st.session_state.discovered_jobs = []
+                    loc_display = f"{p.city}, {p.country}".strip(", ")
+                    st.success(f"✅ LinkedIn PDF successfully parsed! Detected Profile: {p.full_name} | Location: {loc_display}")
+                    st.rerun()
 
     # Editable Profile Tabs
     p = st.session_state.applicant_profile
